@@ -49,6 +49,15 @@ const panelToggle = $('panelToggle');
 const panel = $('panel');
 const closePanel = $('closePanel');
 const dropHint = $('dropHint');
+const orbitalNav = $('orbitalNav');
+const orbitalToggle = $('orbitalToggle');
+const orbitalItems = [...document.querySelectorAll('.orbital-item')];
+const homeLoadBtn = $('homeLoadBtn');
+const homeControlsBtn = $('homeControlsBtn');
+const homeDemoBtn = $('homeDemoBtn');
+const sectionVideo = $('sectionVideo');
+const sectionGravity = $('sectionGravity');
+const sectionGuides = $('sectionGuides');
 const status = $('status');
 const statusText = $('statusText');
 const statusBar = $('statusBar');
@@ -1430,7 +1439,7 @@ async function processVideo() {
     }
     uploadAtlas(L);
     rebuildVolume(L, true);
-    dropHint.classList.add('hidden');
+    initHomeVisualState();
     endProcessing(true);
     clearStatus();
   } catch (err) {
@@ -1450,6 +1459,7 @@ function loadVideoFile(file) {
   setStatus('Leyendo video…', 0.08);
   video.onloadedmetadata = () => {
     state.hasVideo = true;
+    initHomeVisualState();
     state.sourceDuration = Math.max(MIN_TRIM_DURATION, video.duration);
     const defaultDur = Math.min(state.maxClipDuration, state.sourceDuration);
     state.clipStart = 0;
@@ -1529,6 +1539,42 @@ function updatePlayback(now) {
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(updatePlayback);
+}
+
+function setOrbitalOpen(open) {
+  if (!orbitalNav || !orbitalToggle) return;
+  orbitalNav.classList.toggle('open', !!open);
+  orbitalToggle.setAttribute('aria-label', open ? 'Cerrar menú orbital' : 'Abrir menú orbital');
+  orbitalToggle.querySelector('.orbital-core-mark').textContent = open ? '✕' : '◎';
+}
+
+function closeOrbital() { setOrbitalOpen(false); }
+
+function openPanelSection(target = 'video') {
+  panel.classList.add('open');
+  const map = {
+    video: sectionVideo,
+    gravity: sectionGravity,
+    guides: sectionGuides,
+    clip: clipSettings,
+  };
+  [sectionVideo, sectionGravity, sectionGuides].forEach(sec => {
+    if (!sec) return;
+    sec.open = (sec === map[target]) || (target === 'clip' ? sec.open : false);
+  });
+  const node = map[target] || panel;
+  requestAnimationFrame(() => node?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
+  orbitalItems.forEach(btn => btn.classList.toggle('active', btn.dataset.panelTarget === target));
+}
+
+function closePanelUI() {
+  panel.classList.remove('open');
+  closeOrbital();
+}
+
+function initHomeVisualState() {
+  if (!dropHint) return;
+  dropHint.classList.toggle('hidden', state.hasVideo);
 }
 
 input.addEventListener('change', () => loadVideoFile(input.files?.[0]));
@@ -1642,7 +1688,30 @@ modeSlicesBtn.addEventListener('click', () => setVisualMode('slices'));
 modeSolidBtn.addEventListener('click', () => setVisualMode('solid'));
 resetViewBtn.addEventListener('click', resetView);
 panelToggle.addEventListener('click', () => panel.classList.toggle('open'));
-closePanel.addEventListener('click', () => panel.classList.remove('open'));
+closePanel.addEventListener('click', closePanelUI);
+orbitalToggle?.addEventListener('click', () => setOrbitalOpen(!orbitalNav.classList.contains('open')));
+orbitalItems.forEach(btn => btn.addEventListener('click', () => {
+  openPanelSection(btn.dataset.panelTarget || 'video');
+  setOrbitalOpen(false);
+}));
+homeLoadBtn?.addEventListener('click', () => input.click());
+homeControlsBtn?.addEventListener('click', () => {
+  openPanelSection('video');
+  setOrbitalOpen(true);
+});
+homeDemoBtn?.addEventListener('click', () => {
+  state.hasVideo = false;
+  initHomeVisualState();
+  buildDemoAtlas();
+  resetView();
+});
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (orbitalNav?.classList.contains('open') && !orbitalNav.contains(t)) closeOrbital();
+  if (panel.classList.contains('open') && !panel.contains(t) && !panelToggle.contains(t) && !(orbitalNav && orbitalNav.contains(t))) {
+    if (matchMedia('(max-width: 760px)').matches) panel.classList.remove('open');
+  }
+});
 
 for (const ev of ['dragenter', 'dragover']) {
   document.addEventListener(ev, (e) => {
@@ -1705,6 +1774,8 @@ updateGridUI();
 updatePresentPlaneControlsUI();
 buildTrimTicks();
 syncTrimUI();
+initHomeVisualState();
+setOrbitalOpen(false);
 buildDemoAtlas();
 scrubber.max = state.clipDuration;
 totalTimeEl.textContent = `${state.clipDuration.toFixed(1)} s`;

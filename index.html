@@ -37,9 +37,25 @@
     <section id="dropHint" class="drop-hint glass">
       <div class="drop-title">Arrastra un video aquí</div>
       <div class="drop-sub">o toca “Cargar video”. El video se procesa localmente en tu navegador.</div>
+      <div class="home-nav">
+        <button id="homeLoadBtn" class="home-chip" type="button">Cargar</button>
+        <button id="homeControlsBtn" class="home-chip" type="button">Controles</button>
+        <button id="homeDemoBtn" class="home-chip" type="button">Demo</button>
+      </div>
     </section>
 
     <button id="panelToggle" class="panel-toggle glass" aria-label="Abrir controles">☰</button>
+
+    <nav id="orbitalNav" class="orbital-nav" aria-label="Menú orbital de controles">
+      <button id="orbitalToggle" class="orbital-core glass" type="button" aria-label="Abrir menú orbital">
+        <span class="orbital-core-mark">◎</span>
+      </button>
+      <div class="orbital-orbit"></div>
+      <button class="orbital-item glass" data-panel-target="video" type="button"><span class="orbital-glyph">◔</span><em>Tiempo</em></button>
+      <button class="orbital-item glass" data-panel-target="gravity" type="button"><span class="orbital-glyph">◌</span><em>Gravedad</em></button>
+      <button class="orbital-item glass" data-panel-target="guides" type="button"><span class="orbital-glyph">⌁</span><em>Guías</em></button>
+      <button class="orbital-item glass" data-panel-target="clip" type="button"><span class="orbital-glyph">▣</span><em>Recorte</em></button>
+    </nav>
 
     <aside id="panel" class="panel glass">
       <div class="panel-head">
@@ -50,7 +66,7 @@
         <button id="closePanel" class="icon-btn mobile-only" aria-label="Cerrar controles">×</button>
       </div>
 
-      <details class="control-accordion" open>
+      <details id="sectionVideo" class="control-accordion" open>
         <summary><span>Video y tiempo</span><i>⌄</i></summary>
         <div class="accordion-body">
       <div class="mode-block">
@@ -84,7 +100,7 @@
         </div>
       </details>
 
-      <details class="control-accordion">
+      <details id="sectionGravity" class="control-accordion">
         <summary><span>Gravedad y cuadrícula</span><i>⌄</i></summary>
         <div class="accordion-body">
 
@@ -123,7 +139,7 @@
         </div>
       </details>
 
-      <details class="control-accordion">
+      <details id="sectionGuides" class="control-accordion">
         <summary><span>Guías y plano presente</span><i>⌄</i></summary>
         <div class="accordion-body">
 
