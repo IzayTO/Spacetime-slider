@@ -150,3 +150,54 @@ body.is-processing .panel-toggle{pointer-events:none;opacity:.58}
   .orbital-nav.open .orbital-item:nth-of-type(4){transform:translate3d(-114px,142px,0) scale(1)}
   .orbital-nav.open .orbital-item:nth-of-type(5){transform:translate3d(-68px,208px,0) scale(1)}
 }
+
+/* V11: carrusel compacto, modal robusto en iOS/PWA y paneles aislados */
+:root{--app-height:100dvh}
+.trim-modal{height:var(--app-height,100dvh);min-height:var(--app-height,100dvh);inset:auto 0 0 0;overflow:hidden}
+.trim-modal-card{max-height:calc(var(--app-height,100dvh) - max(10px,env(safe-area-inset-top)) - max(10px,env(safe-area-inset-bottom)));overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+@media (max-width:760px){
+  .trim-modal{place-items:end center;padding:0 env(safe-area-inset-right) 0 env(safe-area-inset-left)}
+  .trim-modal-card{width:100%;max-height:calc(var(--app-height,100dvh) - max(8px,env(safe-area-inset-top)));padding:14px 14px calc(14px + env(safe-area-inset-bottom));border-radius:24px 24px 0 0}
+  .trim-preview{max-height:min(34dvh,230px);aspect-ratio:16/9;object-fit:contain}
+}
+
+.orbital-nav{display:none;position:fixed;z-index:12;right:max(8px,env(safe-area-inset-right));top:126px;width:min(330px,calc(100vw - 18px));height:76px;pointer-events:none}
+.orbital-core{position:absolute;right:0;top:8px;width:54px;height:54px;border-radius:50%;display:grid;place-items:center;pointer-events:auto;font-size:26px;z-index:3}
+.orbital-core-mark{line-height:1;transition:transform .2s ease}
+.orbital-nav.open .orbital-core-mark{transform:rotate(45deg)}
+.orbital-carousel{position:absolute;right:64px;top:0;height:76px;width:min(250px,calc(100vw - 92px));border-radius:38px;padding:6px 7px;display:flex;align-items:center;gap:4px;opacity:0;transform:translateX(10px) scale(.98);pointer-events:none;transition:opacity .2s ease,transform .22s ease;overflow:hidden}
+.orbital-nav.open .orbital-carousel{opacity:1;transform:none;pointer-events:auto}
+.orbital-arrow{flex:0 0 26px;width:26px;height:46px;border:0;background:transparent;color:#cfcfd6;font-size:24px;display:grid;place-items:center;padding:0;opacity:.82}
+.orbital-viewport{flex:1;min-width:0;overflow:hidden;touch-action:pan-x}
+.orbital-track{display:flex;align-items:flex-start;gap:10px;transition:transform .24s cubic-bezier(.22,.75,.18,1);will-change:transform}
+.orbital-item{position:relative;flex:0 0 50px;width:50px;height:62px;min-width:50px;padding:0;border:0;background:transparent;color:#f4f4f7;opacity:1;pointer-events:auto;transform:none;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:4px;box-shadow:none}
+.orbital-item::before{content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);width:44px;height:44px;border-radius:50%;background:rgba(23,23,28,.92);border:1px solid rgba(255,255,255,.10);box-shadow:0 7px 18px rgba(0,0,0,.24)}
+.orbital-glyph{position:relative;z-index:1;width:44px;height:44px;border-radius:50%;display:grid;place-items:center;background:transparent;font-size:17px;color:#fff}
+.orbital-item em{position:relative;z-index:1;font-style:normal;font-size:8.5px;font-weight:680;line-height:1;color:#dedee4;white-space:nowrap;text-shadow:none}
+.orbital-item.active::before{border-color:rgba(153,183,255,.46);background:rgba(24,28,39,.98);box-shadow:0 0 0 1px rgba(112,152,255,.08) inset,0 7px 18px rgba(0,0,0,.24)}
+.orbital-item.active .orbital-glyph{color:#dce7ff}
+.orbital-orbit{display:none!important}
+
+@media (max-width:760px) and (orientation:portrait){
+  .orbital-nav{display:block}
+  .panel-toggle{display:none}
+  .panel{top:84px;right:10px;left:10px;bottom:102px;max-height:none;height:auto}
+}
+@media (max-width:420px){
+  .orbital-nav{top:116px;width:calc(100vw - 10px)}
+  .orbital-carousel{right:60px;width:calc(100vw - 82px)}
+  .orbital-item{flex-basis:46px;width:46px;min-width:46px}
+  .orbital-item::before,.orbital-glyph{width:40px;height:40px}
+  .orbital-item em{font-size:8px}
+}
+.trim-modal-mount .panel-window{display:block!important}
+body.trim-modal-open{overflow:hidden;touch-action:none}
+@media (max-width:760px) and (orientation:portrait){
+  .orbital-nav.open .orbital-item:nth-of-type(1),
+  .orbital-nav.open .orbital-item:nth-of-type(2),
+  .orbital-nav.open .orbital-item:nth-of-type(3),
+  .orbital-nav.open .orbital-item:nth-of-type(4),
+  .orbital-nav.open .orbital-item:nth-of-type(5),
+  .orbital-nav.open .orbital-item:nth-of-type(6){transform:none}
+  .orbital-nav.open .orbital-core-mark{transform:rotate(45deg)}
+}

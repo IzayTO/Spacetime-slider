@@ -51,6 +51,10 @@ const closePanel = $('closePanel');
 const dropHint = $('dropHint');
 const orbitalNav = $('orbitalNav');
 const orbitalToggle = $('orbitalToggle');
+const orbitalPrev = $('orbitalPrev');
+const orbitalNext = $('orbitalNext');
+const orbitalViewport = $('orbitalViewport');
+const orbitalTrack = $('orbitalTrack');
 const orbitalItems = [...document.querySelectorAll('.orbital-item')];
 const homeLoadBtn = $('homeLoadBtn');
 const homeControlsBtn = $('homeControlsBtn');
@@ -123,7 +127,7 @@ const renderer = new THREE.WebGLRenderer({
   alpha: false,
   powerPreference: 'high-performance',
 });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+renderer.setPixelRatio(targetPixelRatio());
 renderer.setSize(innerWidth, innerHeight, false);
 renderer.setClearColor(0x000000, 1);
 renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -143,6 +147,9 @@ controls.target.set(0, 0.15, 0);
 controls.touches.ONE = THREE.TOUCH.ROTATE;
 controls.touches.TWO = THREE.TOUCH.DOLLY_PAN;
 controls.update();
+controls.addEventListener('start', () => requestSceneRender(10));
+controls.addEventListener('change', () => requestSceneRender(8));
+controls.addEventListener('end', () => requestSceneRender(14));
 
 scene.add(new THREE.HemisphereLight(0xffffff, 0x111111, 0.62));
 const keyLight = new THREE.DirectionalLight(0xffffff, 1.15);
@@ -177,6 +184,26 @@ const atlasCanvas = document.createElement('canvas');
 const atlasCtx = atlasCanvas.getContext('2d', { alpha: false, desynchronized: true });
 atlasCtx.imageSmoothingEnabled = true;
 try { atlasCtx.imageSmoothingQuality = 'high'; } catch (_) {}
+
+let sceneNeedsRender = true;
+let dampingFrames = 0;
+let carouselBusy = false;
+let carouselPointerStartX = null;
+
+function requestSceneRender(frames = 1) {
+  sceneNeedsRender = true;
+  dampingFrames = Math.max(dampingFrames, frames);
+}
+
+function targetPixelRatio() {
+  const mobile = matchMedia('(max-width: 760px)').matches;
+  return Math.min(devicePixelRatio || 1, mobile ? 1.7 : 1.8);
+}
+
+function syncAppHeight() {
+  const h = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', `${Math.round(h)}px`);
+}
 
 function setStatus(text, p = 0) {
   status.hidden = false;
@@ -281,6 +308,7 @@ function makeAtlasLayout(count, aspect) {
 }
 
 function buildDemoAtlas() {
+  volume.visible = true;
   state.aspect = 16 / 9;
   fitDimensions(state.aspect);
   const count = state.slices;
@@ -1084,6 +1112,7 @@ function resetView() {
   camera.position.set(s * 1.22, s * .88, s * 1.34);
   controls.target.set(0, 0, 0);
   controls.update();
+  requestSceneRender(4);
 }
 
 async function ensureVideoFrameReady() {
@@ -1500,10 +1529,8 @@ function updatePlayback(now) {
   const dt = Math.min(.05, (now - state.lastT) / 1000);
   state.lastT = now;
 
-  // Durante la extracción de fotogramas no renderizamos la escena 3D.
-  // El progreso es DOM, así que sigue actualizándose sin gastar GPU en una
-  // visualización parcial que el usuario no quiere ver.
-  if (state.processing) {
+  // Mientras extraemos fotogramas no renderizamos la escena 3D.
+  if (state.processing || document.hidden) {
     requestAnimationFrame(updatePlayback);
     return;
   }
@@ -1517,6 +1544,16 @@ function updatePlayback(now) {
     }
     scrubber.value = state.progress;
     currentTimeEl.textContent = state.progress.toFixed(1);
+    sceneNeedsRender = true;
+  }
+
+  // Cuando todo está quieto, conservamos el RAF liviano pero evitamos la parte
+  // cara: shaders, OrbitControls y render WebGL. La escena sólo vuelve a dibujarse
+  // al reproducir, mover la cámara o cambiar un control.
+  const shouldRender = state.playing || sceneNeedsRender || dampingFrames > 0;
+  if (!shouldRender) {
+    requestAnimationFrame(updatePlayback);
+    return;
   }
 
   if (sliceMaterial) {
@@ -1541,6 +1578,8 @@ function updatePlayback(now) {
   updateTimeRuler();
   controls.update();
   renderer.render(scene, camera);
+  sceneNeedsRender = false;
+  if (dampingFrames > 0) dampingFrames--;
   requestAnimationFrame(updatePlayback);
 }
 
@@ -1548,10 +1587,65 @@ function setOrbitalOpen(open) {
   if (!orbitalNav || !orbitalToggle) return;
   orbitalNav.classList.toggle('open', !!open);
   orbitalToggle.setAttribute('aria-label', open ? 'Cerrar menú orbital' : 'Abrir menú orbital');
-  orbitalToggle.querySelector('.orbital-core-mark').textContent = open ? '×' : '+';
+  orbitalToggle.querySelector('.orbital-core-mark').textContent = '+';
 }
 
 function closeOrbital() { setOrbitalOpen(false); }
+
+function carouselStep(direction = 1) {
+  if (!orbitalTrack || carouselBusy || orbitalTrack.children.length < 2) return;
+  carouselBusy = true;
+  const gap = 10;
+  const first = orbitalTrack.children[0];
+  const itemWidth = first.getBoundingClientRect().width || 50;
+  const step = itemWidth + gap;
+
+  if (direction > 0) {
+    orbitalTrack.style.transition = 'transform .24s cubic-bezier(.22,.75,.18,1)';
+    orbitalTrack.style.transform = `translate3d(${-step}px,0,0)`;
+    setTimeout(() => {
+      orbitalTrack.style.transition = 'none';
+      orbitalTrack.appendChild(orbitalTrack.firstElementChild);
+      orbitalTrack.style.transform = 'translate3d(0,0,0)';
+      requestAnimationFrame(() => {
+        orbitalTrack.style.transition = '';
+        carouselBusy = false;
+      });
+    }, 245);
+  } else {
+    orbitalTrack.style.transition = 'none';
+    orbitalTrack.insertBefore(orbitalTrack.lastElementChild, orbitalTrack.firstElementChild);
+    orbitalTrack.style.transform = `translate3d(${-step}px,0,0)`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        orbitalTrack.style.transition = 'transform .24s cubic-bezier(.22,.75,.18,1)';
+        orbitalTrack.style.transform = 'translate3d(0,0,0)';
+        setTimeout(() => {
+          orbitalTrack.style.transition = '';
+          carouselBusy = false;
+        }, 245);
+      });
+    });
+  }
+}
+
+function initOrbitalCarousel() {
+  if (!orbitalViewport || !orbitalTrack) return;
+  orbitalPrev?.addEventListener('click', (e) => { e.stopPropagation(); carouselStep(-1); });
+  orbitalNext?.addEventListener('click', (e) => { e.stopPropagation(); carouselStep(1); });
+
+  orbitalViewport.addEventListener('pointerdown', (e) => {
+    carouselPointerStartX = e.clientX;
+  });
+  orbitalViewport.addEventListener('pointerup', (e) => {
+    if (carouselPointerStartX == null) return;
+    const dx = e.clientX - carouselPointerStartX;
+    carouselPointerStartX = null;
+    if (Math.abs(dx) < 28) return;
+    carouselStep(dx < 0 ? 1 : -1);
+  });
+  orbitalViewport.addEventListener('pointercancel', () => { carouselPointerStartX = null; });
+}
 
 function syncPanelWindow(target = 'video') {
   const labelMap = {
@@ -1628,6 +1722,7 @@ rewindBtn.addEventListener('click', () => {
   scrubber.value = 0;
   currentTimeEl.textContent = '0.0';
   playBtn.textContent = '▶';
+  requestSceneRender(2);
 });
 
 scrubber.addEventListener('input', () => {
@@ -1635,6 +1730,7 @@ scrubber.addEventListener('input', () => {
   playBtn.textContent = '▶';
   state.progress = Number(scrubber.value);
   currentTimeEl.textContent = state.progress.toFixed(1);
+  requestSceneRender(2);
 });
 
 radiusSlider.addEventListener('input', () => {
@@ -1691,7 +1787,8 @@ sliceSlider.addEventListener('input', () => {
 });
 sliceSlider.addEventListener('change', () => {
   state.slices = Number(sliceSlider.value);
-  state.hasVideo ? processVideo() : buildDemoAtlas();
+  if (state.hasVideo) processVideo();
+  else requestSceneRender(1);
 });
 
 modeSlicesBtn.addEventListener('click', () => setVisualMode('slices'));
@@ -1723,6 +1820,10 @@ document.addEventListener('click', (e) => {
   }
 });
 
+panel.addEventListener('input', () => requestSceneRender(2));
+panel.addEventListener('change', () => requestSceneRender(2));
+panel.addEventListener('click', () => requestSceneRender(1));
+
 for (const ev of ['dragenter', 'dragover']) {
   document.addEventListener(ev, (e) => {
     e.preventDefault();
@@ -1740,14 +1841,19 @@ document.addEventListener('drop', (e) => {
   if (f) loadVideoFile(f);
 });
 
-addEventListener('resize', () => {
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.8));
+function handleViewportResize() {
+  syncAppHeight();
+  renderer.setPixelRatio(targetPixelRatio());
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
   syncTrimUI();
   buildTimelineTicks();
-});
+  requestSceneRender(2);
+}
+addEventListener('resize', handleViewportResize);
+window.visualViewport?.addEventListener('resize', syncAppHeight);
+window.visualViewport?.addEventListener('scroll', syncAppHeight);
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
@@ -1787,7 +1893,9 @@ syncTrimUI();
 initHomeVisualState();
 setOrbitalOpen(false);
 syncPanelWindow('video');
-buildDemoAtlas();
+initOrbitalCarousel();
+syncAppHeight();
+volume.visible = false;
 scrubber.max = state.clipDuration;
 totalTimeEl.textContent = `${state.clipDuration.toFixed(1)} s`;
 buildTimelineTicks();
