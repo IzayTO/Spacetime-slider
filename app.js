@@ -1841,6 +1841,46 @@ document.addEventListener('drop', (e) => {
   if (f) loadVideoFile(f);
 });
 
+document.addEventListener('keydown', (e) => {
+  if (innerWidth <= 760) return;
+  const tag = e.target?.tagName?.toLowerCase?.();
+  if (['input','textarea','select','button'].includes(tag) || e.target?.isContentEditable) return;
+
+  if (e.key === 'Escape') {
+    closePanelUI();
+    closeOrbital();
+    return;
+  }
+  if (!trimModal.hidden) return;
+
+  if (e.code === 'Space') {
+    e.preventDefault();
+    playBtn.click();
+    return;
+  }
+  if (e.key.toLowerCase() === 'r') {
+    e.preventDefault();
+    resetView();
+    requestSceneRender(4);
+    return;
+  }
+  if (e.key.toLowerCase() === 'm') {
+    e.preventDefault();
+    setOrbitalOpen(!orbitalNav.classList.contains('open'));
+    return;
+  }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault();
+    state.playing = false;
+    playBtn.textContent = '▶';
+    const delta = (e.shiftKey ? 1 : 0.1) * (e.key === 'ArrowRight' ? 1 : -1);
+    state.progress = THREE.MathUtils.clamp(state.progress + delta, 0, state.clipDuration);
+    scrubber.value = state.progress;
+    currentTimeEl.textContent = state.progress.toFixed(1);
+    requestSceneRender(3);
+  }
+});
+
 function handleViewportResize() {
   syncAppHeight();
   renderer.setPixelRatio(targetPixelRatio());
