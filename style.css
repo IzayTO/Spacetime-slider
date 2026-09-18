@@ -61,3 +61,15 @@ button{color:inherit}
   .trim-preview{max-height:220px;border-radius:16px}
   .trim-modal-title{font-size:19px}
 }
+
+/* V8: controles plegables y modo de procesamiento liviano */
+.control-accordion{border-top:1px solid rgba(255,255,255,.065);padding:2px 0}
+.control-accordion>summary{list-style:none;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:42px;cursor:pointer;color:#ececf0;font-size:12px;font-weight:720;letter-spacing:.005em}
+.control-accordion>summary::-webkit-details-marker{display:none}
+.control-accordion>summary i{font-style:normal;color:#777780;font-size:14px;transition:transform .18s ease}
+.control-accordion[open]>summary i{transform:rotate(180deg)}
+.accordion-body{padding:0 0 7px}
+.control-accordion:not([open]) .accordion-body{display:none}
+body.is-processing #stage{visibility:hidden}
+body.is-processing .panel,body.is-processing .timeline,body.is-processing .axis-legend{pointer-events:none;opacity:.58}
+body.is-processing .panel-toggle{pointer-events:none;opacity:.58}

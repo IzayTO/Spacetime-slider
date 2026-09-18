@@ -102,6 +102,7 @@ const state = {
   presentPlaneOpacity: 0.18,
   presentPlaneOutlineOpacity: 0.42,
   presentPlaneColor: '#f5f5f7',
+  processing: false,
 };
 
 const renderer = new THREE.WebGLRenderer({
@@ -171,6 +172,38 @@ function setStatus(text, p = 0) {
   statusBar.style.width = `${Math.round(p * 100)}%`;
 }
 function clearStatus() { status.hidden = true; }
+
+function beginProcessing() {
+  state.processing = true;
+  state.playing = false;
+  playBtn.textContent = '▶';
+  volume.visible = false;
+  document.body.classList.add('is-processing');
+  renderer.clear(true, true, true);
+}
+
+function endProcessing(showVolume = true) {
+  state.processing = false;
+  volume.visible = showVolume;
+  document.body.classList.remove('is-processing');
+  state.lastT = performance.now();
+  if (showVolume) renderer.render(scene, camera);
+}
+
+let trimPreviewSeekTimer = null;
+let trimPreviewSeekTarget = 0;
+function scheduleTrimPreviewSeek(time) {
+  if (!trimPreview || !trimModal || trimModal.hidden || !Number.isFinite(time)) return;
+  trimPreviewSeekTarget = THREE.MathUtils.clamp(time, 0, Math.max(0, getSourceDuration() - 0.001));
+  if (trimPreviewSeekTimer) return;
+  trimPreviewSeekTimer = setTimeout(() => {
+    trimPreviewSeekTimer = null;
+    try {
+      if (typeof trimPreview.fastSeek === 'function') trimPreview.fastSeek(trimPreviewSeekTarget);
+      else trimPreview.currentTime = trimPreviewSeekTarget;
+    } catch (_) {}
+  }, 70);
+}
 
 function fitDimensions(aspect) {
   const maxSide = 5.6;
@@ -1218,6 +1251,9 @@ function setTrimRange(start, end, moved = 'end', { updateTimeline = false } = {}
   state.clipEnd = range.end;
   state.clipDuration = range.duration;
   syncTrimUI();
+  if (moved === 'start') scheduleTrimPreviewSeek(range.start);
+  else if (moved === 'range') scheduleTrimPreviewSeek((range.start + range.end) * 0.5);
+  else scheduleTrimPreviewSeek(range.end);
   if (updateTimeline) {
     state.progress = Math.min(state.progress, state.clipDuration);
     scrubber.max = state.clipDuration;
@@ -1288,7 +1324,7 @@ function attachTrimDrag(handle, kind) {
       }
       const dur = dragStartB - dragStartA;
       let start = THREE.MathUtils.clamp(dragStartA + delta, 0, Math.max(0, getSourceDuration() - dur));
-      setTrimRange(start, start + dur, 'end');
+      setTrimRange(start, start + dur, 'range');
     }
   };
 
@@ -1321,10 +1357,12 @@ function openTrimModal() {
   if (trimPreview && state.sourceUrl) {
     trimPreview.src = state.sourceUrl;
     trimPreview.load();
+    trimPreview.onloadedmetadata = () => scheduleTrimPreviewSeek(state.clipStart);
   }
   requestAnimationFrame(() => {
     buildTrimTicks();
     syncTrimUI();
+    scheduleTrimPreviewSeek(state.clipStart);
   });
 }
 
@@ -1376,6 +1414,7 @@ async function processVideo() {
   atlasCanvas.height = L.rows * L.tileH;
   atlasCtx.fillStyle = '#000';
   atlasCtx.fillRect(0, 0, atlasCanvas.width, atlasCanvas.height);
+  beginProcessing();
   setStatus(`Procesando ${dur.toFixed(2)} s del video…`, 0);
 
   try {
@@ -1392,9 +1431,11 @@ async function processVideo() {
     uploadAtlas(L);
     rebuildVolume(L, true);
     dropHint.classList.add('hidden');
+    endProcessing(true);
     clearStatus();
   } catch (err) {
     console.error(err);
+    endProcessing(true);
     setStatus('No pude decodificar ese video. Prueba MP4/H.264 o un recorte más corto.', 1);
     setTimeout(clearStatus, 3200);
   }
@@ -1445,6 +1486,14 @@ function updateFutureUI(rebuild = false) {
 function updatePlayback(now) {
   const dt = Math.min(.05, (now - state.lastT) / 1000);
   state.lastT = now;
+
+  // Durante la extracción de fotogramas no renderizamos la escena 3D.
+  // El progreso es DOM, así que sigue actualizándose sin gastar GPU en una
+  // visualización parcial que el usuario no quiere ver.
+  if (state.processing) {
+    requestAnimationFrame(updatePlayback);
+    return;
+  }
 
   if (state.playing) {
     state.progress += dt;

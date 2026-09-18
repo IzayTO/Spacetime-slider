@@ -9,3 +9,9 @@ Visualizador 3D de un clip de video como volumen temporal.
 - Autoalinear, presets 2/4/5/6/8/10 s y ajuste libre continúan disponibles.
 
 La visualización de curvatura es una metáfora pedagógica, no una solución numérica de relatividad general.
+
+## V8 — rendimiento y editor de recorte
+- Mientras se extraen los fotogramas, la escena 3D se oculta y el render WebGL se pausa. Sólo se actualiza el indicador de progreso y el volumen aparece de golpe al terminar.
+- El panel principal se organizó en secciones plegables para reducir ruido visual. Esto es principalmente una mejora de interfaz; la ganancia de rendimiento real viene de pausar el render 3D durante el procesamiento.
+- En el editor de recorte, al mover inicio/fin la vista previa del video sigue el tirador. El seek está limitado en frecuencia para no saturar Safari/iPhone.
+- El recorte sigue admitiendo como máximo 10 s y conserva Autoalinear y presets.

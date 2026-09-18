@@ -50,6 +50,9 @@
         <button id="closePanel" class="icon-btn mobile-only" aria-label="Cerrar controles">×</button>
       </div>
 
+      <details class="control-accordion" open>
+        <summary><span>Video y tiempo</span><i>⌄</i></summary>
+        <div class="accordion-body">
       <div class="mode-block">
         <div class="slider-label"><span>Visualización</span><output id="modeOut">Rebanadas</output></div>
         <div class="segmented" role="group" aria-label="Modo de visualización">
@@ -77,6 +80,13 @@
         <input id="futureOpacitySlider" type="range" min="5" max="55" step="1" value="22" />
         <p class="mini-note">El presente se mantiene definido; pasado y futuro quedan visualmente secundarios.</p>
       </div>
+
+        </div>
+      </details>
+
+      <details class="control-accordion">
+        <summary><span>Gravedad y cuadrícula</span><i>⌄</i></summary>
+        <div class="accordion-body">
 
       <div class="control-row switch-row">
         <div>
@@ -110,7 +120,12 @@
       </div>
 
 
-      <div class="divider"></div>
+        </div>
+      </details>
+
+      <details class="control-accordion">
+        <summary><span>Guías y plano presente</span><i>⌄</i></summary>
+        <div class="accordion-body">
 
       <div class="control-title section-title">Etiquetas y guías</div>
 
@@ -179,6 +194,10 @@
         <input id="sliceSlider" type="range" min="24" max="160" step="4" value="64" />
         <p class="mini-note">Más rebanadas suavizan el perfil temporal, pero tardan más en procesarse.</p>
       </div>
+
+
+        </div>
+      </details>
 
       <div class="divider"></div>
 
