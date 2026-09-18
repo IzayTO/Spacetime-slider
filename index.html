@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#000000" />
+  <title>Espacio × Tiempo</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet" href="./style.css" />
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.186.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.186.0/examples/jsm/"
+    }
+  }
+  </script>
+</head>
+<body>
+  <main id="app">
+    <canvas id="stage" aria-label="Visualizador tridimensional de espacio-tiempo"></canvas>
+
+    <header class="topbar glass">
+      <div class="brand">
+        <span class="eyebrow">VISUALIZADOR</span>
+        <strong>Espacio × Tiempo</strong>
+      </div>
+      <div class="top-actions">
+        <button id="resetViewBtn" class="icon-btn" title="Centrar vista" aria-label="Centrar vista">◎</button>
+        <label class="file-btn">
+          <input id="videoInput" type="file" accept="video/*" />
+          <span>Cargar video</span>
+        </label>
+      </div>
+    </header>
+
+    <section id="dropHint" class="drop-hint glass">
+      <div class="drop-title">Arrastra un video aquí</div>
+      <div class="drop-sub">o toca “Cargar video”. Se usan solo fotogramas locales del navegador.</div>
+    </section>
+
+    <button id="panelToggle" class="panel-toggle glass" aria-label="Abrir controles">☰</button>
+
+    <aside id="panel" class="panel glass">
+      <div class="panel-head">
+        <div>
+          <div class="eyebrow">CAPAS</div>
+          <div class="panel-title">Espacio-tiempo</div>
+        </div>
+        <button id="closePanel" class="icon-btn mobile-only" aria-label="Cerrar controles">×</button>
+      </div>
+
+      <div class="control-row switch-row">
+        <div>
+          <div class="control-title">Esfera</div>
+          <div class="control-sub">Deformación local</div>
+        </div>
+        <label class="switch"><input id="sphereToggle" type="checkbox"><span></span></label>
+      </div>
+
+      <div class="control-row switch-row">
+        <div>
+          <div class="control-title">Cuadrícula 3D</div>
+          <div class="control-sub">Referencia espacial neutra</div>
+        </div>
+        <label class="switch"><input id="gridToggle" type="checkbox"><span></span></label>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label"><span>Radio</span><output id="radiusOut">1.15</output></div>
+        <input id="radiusSlider" type="range" min="0.55" max="2.30" step="0.01" value="1.15" />
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label"><span>Intensidad</span><output id="strengthOut">0.72</output></div>
+        <input id="strengthSlider" type="range" min="0" max="1.35" step="0.01" value="0.72" />
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label"><span>Rebanadas</span><output id="sliceOut">44</output></div>
+        <input id="sliceSlider" type="range" min="20" max="72" step="4" value="44" />
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="clip-settings">
+        <div class="control-title">Clip temporal</div>
+        <div class="mini-grid">
+          <label>Inicio <input id="clipStart" type="number" min="0" step="0.1" value="0"></label>
+          <label>Duración <input id="clipDuration" type="number" min="1" max="8" step="0.1" value="5"></label>
+        </div>
+        <button id="processBtn" class="soft-btn">Procesar clip</button>
+      </div>
+
+      <div class="science-note">
+        La deformación es una metáfora geométrica interactiva. Sirve para visualizar dilatación temporal, no para resolver una métrica relativista exacta.
+      </div>
+    </aside>
+
+    <div class="axis-legend glass">
+      <span><b>X</b> Tiempo ↑</span>
+      <span><b>Y</b> Espacio ↔</span>
+      <span><b>Z</b> Espacio ↗</span>
+    </div>
+
+    <div id="status" class="status glass" hidden>
+      <div id="statusText">Procesando…</div>
+      <div class="status-track"><i id="statusBar"></i></div>
+    </div>
+
+    <footer class="timeline glass">
+      <button id="playBtn" class="play-btn" aria-label="Reproducir o pausar">▶</button>
+      <div class="time-readout"><span id="currentTime">0.0</span><small> / </small><span id="totalTime">5.0 s</span></div>
+      <div class="scrub-wrap">
+        <input id="scrubber" type="range" min="0" max="5" step="0.001" value="0" />
+        <div class="ticks"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+      </div>
+      <button id="rewindBtn" class="icon-btn" title="Volver al inicio" aria-label="Volver al inicio">↺</button>
+    </footer>
+
+    <video id="sourceVideo" playsinline muted preload="metadata"></video>
+  </main>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
