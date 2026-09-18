@@ -66,6 +66,20 @@
 
       <div class="control-row switch-row">
         <div>
+          <div class="control-title">Visualizar futuro</div>
+          <div class="control-sub">Muestra como sombra los fotogramas que todavía no han llegado al presente</div>
+        </div>
+        <label class="switch"><input id="futureToggle" type="checkbox"><span></span></label>
+      </div>
+
+      <div id="futureOpacityBlock" class="slider-block linked-control">
+        <div class="slider-label"><span>Opacidad del futuro</span><output id="futureOpacityOut">22%</output></div>
+        <input id="futureOpacitySlider" type="range" min="5" max="55" step="1" value="22" />
+        <p class="mini-note">El presente se mantiene definido; pasado y futuro quedan visualmente secundarios.</p>
+      </div>
+
+      <div class="control-row switch-row">
+        <div>
           <div class="control-title">Esfera</div>
           <div class="control-sub">Deforma los fotogramas dentro de su radio</div>
         </div>

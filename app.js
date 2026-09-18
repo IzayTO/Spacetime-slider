@@ -16,12 +16,16 @@ const radiusSlider = $('radiusSlider');
 const strengthSlider = $('strengthSlider');
 const sliceSlider = $('sliceSlider');
 const brightnessSlider = $('brightnessSlider');
+const futureToggle = $('futureToggle');
+const futureOpacitySlider = $('futureOpacitySlider');
 const gridOpacitySlider = $('gridOpacitySlider');
 const radiusOut = $('radiusOut');
 const strengthOut = $('strengthOut');
 const sliceOut = $('sliceOut');
 const brightnessOut = $('brightnessOut');
+const futureOpacityOut = $('futureOpacityOut');
 const gridOpacityOut = $('gridOpacityOut');
+const futureOpacityBlock = $('futureOpacityBlock');
 const gridOpacityBlock = $('gridOpacityBlock');
 const modeSlicesBtn = $('modeSlicesBtn');
 const modeSolidBtn = $('modeSolidBtn');
@@ -44,6 +48,7 @@ const state = {
   slices: 64,
   visualMode: 'slices',
   brightness: 1,
+  futureOpacity: 0.22,
   gridOpacity: 0.20,
   playing: false,
   progress: 0,
@@ -101,9 +106,16 @@ let boxLines = null;
 let gridLines = null;
 let sphere = null;
 let axesGroup = null;
+let timeRulerGroup = null;
+let presentLabel = null;
+let pastLabel = null;
+let futureLabel = null;
+let presentMarker = null;
 
 const atlasCanvas = document.createElement('canvas');
 const atlasCtx = atlasCanvas.getContext('2d', { alpha: false, desynchronized: true });
+atlasCtx.imageSmoothingEnabled = true;
+try { atlasCtx.imageSmoothingQuality = 'high'; } catch (_) {}
 
 function setStatus(text, p = 0) {
   status.hidden = false;
@@ -137,7 +149,12 @@ function disposeObj(obj) {
 function makeAtlasLayout(count, aspect) {
   const mobile = matchMedia('(max-width: 760px)').matches;
   const maxTex = renderer.capabilities.maxTextureSize || 4096;
-  let tileW = mobile ? 256 : 320;
+  // Priorizamos más resolución cuando cabe en una sola textura. Esto reduce
+  // el pixelado sin disparar memoria: si el atlas no cabe, el bucle de abajo
+  // baja la resolución automáticamente según el límite real de la GPU.
+  let tileW;
+  if (mobile) tileW = count <= 64 ? 384 : (count <= 104 ? 320 : 256);
+  else tileW = count <= 80 ? 480 : (count <= 128 ? 384 : 320);
 
   // Si el video es vertical y hay muchas rebanadas, reducimos la resolución
   // de cada mini-fotograma antes de superar el tamaño máximo de textura de la GPU.
@@ -253,6 +270,8 @@ function rebuildVolume(layout = atlasTexture?.userData.layout, resetCamera = fal
   disposeObj(gridLines); gridLines = null;
   disposeObj(sphere); sphere = null;
   disposeObj(axesGroup); axesGroup = null;
+  disposeObj(timeRulerGroup); timeRulerGroup = null;
+  presentLabel = pastLabel = futureLabel = presentMarker = null;
 
   const count = state.slices;
   const mobile = matchMedia('(max-width: 760px)').matches;
@@ -283,6 +302,8 @@ function rebuildVolume(layout = atlasTexture?.userData.layout, resetCamera = fal
       uRadius: { value: Number(radiusSlider.value) },
       uStrength: { value: Number(strengthSlider.value) },
       uBrightness: { value: state.brightness },
+      uFutureOn: { value: futureToggle.checked ? 1 : 0 },
+      uFutureOpacity: { value: state.futureOpacity },
       uSliceStep: { value: 1 / Math.max(1, count - 1) },
     },
     vertexShader: `
@@ -336,6 +357,8 @@ function rebuildVolume(layout = atlasTexture?.userData.layout, resetCamera = fal
       uniform float uPlaneD;
       uniform float uSolidMode;
       uniform float uBrightness;
+      uniform float uFutureOn;
+      uniform float uFutureOpacity;
       uniform float uSliceStep;
       varying vec3 vLocalPos;
       varying vec3 vLocalNormal;
@@ -367,8 +390,11 @@ function rebuildVolume(layout = atlasTexture?.userData.layout, resetCamera = fal
       }
 
       void main(){
-        // Medio paso extra hace que el primer fotograma exista de verdad en t = 0.
-        if (vSlice > uProgress + uSliceStep * 0.52) discard;
+        // Separamos pasado/presente de futuro. Si "Visualizar futuro" está
+        // apagado conservamos el comportamiento clásico y descartamos lo que
+        // todavía no ha ocurrido.
+        float isFuture = step(uProgress + uSliceStep * 0.52, vSlice);
+        if (isFuture > 0.5 && uFutureOn < 0.5) discard;
 
         float col = mod(vFrame, uCols);
         float row = floor(vFrame / uCols);
@@ -376,21 +402,35 @@ function rebuildVolume(layout = atlasTexture?.userData.layout, resetCamera = fal
         vec4 tex = texture2D(uAtlas, atlasUV);
         vec3 color = max(vec3(0.0), tex.rgb * uBrightness);
 
+        // El futuro es una huella ya colocada en el volumen, pero no tan
+        // definida como lo que ya ocurrió. No inventamos fotogramas: son las
+        // mismas rebanadas capturadas del clip, sólo con otra lectura visual.
+        float futureDistance = clamp((vSlice - uProgress) / max(1.0 - uProgress, uSliceStep), 0.0, 1.0);
+        float futureAlpha = uFutureOpacity * mix(0.15, 0.055, futureDistance);
+        vec3 futureColor = color * mix(0.88, 0.68, futureDistance);
+
         if (uSolidMode > 0.5) {
-          gl_FragColor = vec4(color, 1.0);
+          if (isFuture > 0.5) {
+            gl_FragColor = vec4(futureColor, futureAlpha * 1.45);
+          } else {
+            gl_FragColor = vec4(color, 1.0);
+          }
           return;
         }
 
         float age = clamp((uProgress - vSlice) / max(uProgress, uSliceStep), 0.0, 1.0);
         float nearest = 1.0 - smoothstep(0.0, uSliceStep * 1.10, abs(vSlice - uProgress));
         float trail = mix(0.14, 0.055, age);
-        float alpha = min(0.98, trail + nearest * 0.86);
-        alpha *= mix(1.0, 1.04, vInfluence);
-        gl_FragColor = vec4(color, alpha);
+        float pastAlpha = min(0.98, trail + nearest * 0.86);
+        pastAlpha *= mix(1.0, 1.04, vInfluence);
+
+        float alpha = mix(pastAlpha, futureAlpha, isFuture);
+        vec3 finalColor = mix(color, futureColor, isFuture);
+        gl_FragColor = vec4(finalColor, alpha);
       }
     `,
-    transparent: !solid,
-    depthWrite: solid,
+    transparent: !solid || futureToggle.checked,
+    depthWrite: solid && !futureToggle.checked,
     depthTest: true,
     side: THREE.DoubleSide,
     blending: THREE.NormalBlending,
@@ -403,6 +443,7 @@ function rebuildVolume(layout = atlasTexture?.userData.layout, resetCamera = fal
   buildBoxAndGrid();
   buildSphere();
   buildAxes();
+  buildTimeRuler();
   if (resetCamera) resetView();
 }
 
@@ -419,17 +460,36 @@ function buildBoxAndGrid() {
   const pts = [];
   const W = state.planeW, H = state.timeH, D = state.planeD;
   const nx = 8, ny = 8, nz = 8;
+  const mobile = matchMedia('(max-width: 760px)').matches;
+  // Cada línea se subdivide en tramos pequeños. Así el shader puede curvarla
+  // suavemente alrededor de la esfera, en vez de mover solo sus extremos.
+  const curveSegments = mobile ? 24 : 32;
+
+  const addSegmentedLine = (ax, ay, az, bx, by, bz, segments = curveSegments) => {
+    for (let i = 0; i < segments; i++) {
+      const t0 = i / segments;
+      const t1 = (i + 1) / segments;
+      pts.push(
+        THREE.MathUtils.lerp(ax, bx, t0),
+        THREE.MathUtils.lerp(ay, by, t0),
+        THREE.MathUtils.lerp(az, bz, t0),
+        THREE.MathUtils.lerp(ax, bx, t1),
+        THREE.MathUtils.lerp(ay, by, t1),
+        THREE.MathUtils.lerp(az, bz, t1),
+      );
+    }
+  };
 
   // Planos horizontales XZ.
   for (let iy = 1; iy < ny; iy++) {
     const y = -H / 2 + H * iy / ny;
     for (let iz = 0; iz <= nz; iz++) {
       const z = -D / 2 + D * iz / nz;
-      pts.push(-W / 2, y, z, W / 2, y, z);
+      addSegmentedLine(-W / 2, y, z, W / 2, y, z);
     }
     for (let ix = 0; ix <= nx; ix++) {
       const x = -W / 2 + W * ix / nx;
-      pts.push(x, y, -D / 2, x, y, D / 2);
+      addSegmentedLine(x, y, -D / 2, x, y, D / 2);
     }
   }
 
@@ -438,23 +498,64 @@ function buildBoxAndGrid() {
     const x = -W / 2 + W * ix / nx;
     for (let iz = 1; iz < nz; iz++) {
       const z = -D / 2 + D * iz / nz;
-      pts.push(x, -H / 2, z, x, H / 2, z);
+      addSegmentedLine(x, -H / 2, z, x, H / 2, z);
     }
   }
 
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-  gridLines = new THREE.LineSegments(
-    g,
-    new THREE.LineBasicMaterial({
-      color: 0xc2c2ca,
-      transparent: true,
-      opacity: state.gridOpacity,
-      depthWrite: false,
-      depthTest: false,
-    })
-  );
+
+  // La cuadrícula usa EXACTAMENTE la misma deformación espacial/temporal
+  // que los fotogramas. No hay un segundo modo ni un toggle extra:
+  // esfera apagada = recta; esfera encendida = se curva automáticamente.
+  const gridMaterial = new THREE.ShaderMaterial({
+    uniforms: {
+      uSphereOn: { value: sphereToggle.checked ? 1 : 0 },
+      uRadius: { value: Number(radiusSlider.value) },
+      uStrength: { value: Number(strengthSlider.value) },
+      uOpacity: { value: state.gridOpacity },
+      uColor: { value: new THREE.Color(0xc2c2ca) },
+    },
+    vertexShader: `
+      precision highp float;
+      uniform float uSphereOn;
+      uniform float uRadius;
+      uniform float uStrength;
+
+      void main(){
+        vec3 p = position;
+        vec3 delta = -p;
+        float d = length(delta);
+        float q = clamp(1.0 - d / max(uRadius, 0.001), 0.0, 1.0);
+        float inf = q*q*(3.0-2.0*q) * uSphereOn;
+        vec3 dir = delta / max(d, 0.0001);
+
+        // Mismo campo visual de deformación que usan los fotogramas.
+        p += dir * inf * uStrength * uRadius * 0.38;
+        // Misma compresión del eje temporal (Y) usada para sugerir dilatación.
+        p.y += sign(-p.y) * inf * uStrength * uRadius * 0.10;
+
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+      }
+    `,
+    fragmentShader: `
+      precision highp float;
+      uniform vec3 uColor;
+      uniform float uOpacity;
+
+      void main(){
+        gl_FragColor = vec4(uColor, uOpacity);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
+    blending: THREE.NormalBlending,
+  });
+
+  gridLines = new THREE.LineSegments(g, gridMaterial);
   gridLines.visible = gridToggle.checked;
+  gridLines.frustumCulled = false;
   gridLines.renderOrder = 20;
   volume.add(gridLines);
 }
@@ -483,21 +584,32 @@ function buildSphere() {
   sphere.add(halo);
 }
 
-function makeTextSprite(text) {
+function makeTextSprite(text, options = {}) {
   const c = document.createElement('canvas');
-  c.width = 512;
-  c.height = 96;
+  c.width = options.canvasW || 512;
+  c.height = options.canvasH || 96;
   const ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
-  ctx.font = '600 32px -apple-system, BlinkMacSystemFont, sans-serif';
-  ctx.fillStyle = 'rgba(238,238,242,.84)';
-  ctx.fillText(text, 14, 55);
+  const weight = options.weight || 600;
+  const fontSize = options.fontSize || 32;
+  ctx.font = `${weight} ${fontSize}px -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.fillStyle = options.fill || 'rgba(238,238,242,.84)';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, options.padX || 14, c.height * 0.52);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false, depthWrite: false });
-  const s = new THREE.Sprite(mat);
-  s.scale.set(1.7, .32, 1);
-  return s;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  const mat = new THREE.SpriteMaterial({
+    map: tex,
+    transparent: true,
+    opacity: options.opacity ?? 1,
+    depthTest: false,
+    depthWrite: false
+  });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(options.scaleX || 1.7, options.scaleY || .32, 1);
+  return sprite;
 }
 
 function buildAxes() {
@@ -518,6 +630,98 @@ function buildAxes() {
   z.position.copy(o).add(new THREE.Vector3(0, .10, D * .62));
   axesGroup.add(t, y, z);
   volume.add(axesGroup);
+}
+
+function buildTimeRuler() {
+  timeRulerGroup = new THREE.Group();
+  const W = state.planeW, H = state.timeH, D = state.planeD;
+  const x = -W / 2 - 0.42;
+  const z = D / 2 + 0.12;
+  const y0 = -H / 2;
+  const y1 = H / 2;
+
+  const lineMat = new THREE.LineBasicMaterial({
+    color: 0xb9b9c0,
+    transparent: true,
+    opacity: 0.46,
+    depthWrite: false,
+    depthTest: false
+  });
+
+  const pts = [new THREE.Vector3(x, y0, z), new THREE.Vector3(x, y1, z)];
+  const tickTimes = [];
+  const dur = Math.max(0.001, state.clipDuration);
+  for (let t = 0; t <= Math.floor(dur + 1e-6); t += 1) tickTimes.push(t);
+  if (Math.abs(tickTimes[tickTimes.length - 1] - dur) > 0.05) tickTimes.push(dur);
+
+  for (const t of tickTimes) {
+    const f = THREE.MathUtils.clamp(t / dur, 0, 1);
+    const y = THREE.MathUtils.lerp(y0, y1, f);
+    pts.push(new THREE.Vector3(x - 0.10, y, z), new THREE.Vector3(x + 0.13, y, z));
+
+    const label = makeTextSprite(`${Number.isInteger(t) ? t.toFixed(0) : t.toFixed(1)} s`, {
+      fontSize: 27,
+      weight: 500,
+      fill: 'rgba(210,210,216,.68)',
+      opacity: 0.82,
+      scaleX: 0.72,
+      scaleY: 0.16
+    });
+    label.position.set(x - 0.48, y, z);
+    timeRulerGroup.add(label);
+  }
+
+  const g = new THREE.BufferGeometry().setFromPoints(pts);
+  const line = new THREE.LineSegments(g, lineMat);
+  line.renderOrder = 40;
+  timeRulerGroup.add(line);
+
+  pastLabel = makeTextSprite('PASADO', {
+    fontSize: 29, weight: 650, fill: 'rgba(205,205,212,.52)', opacity: 0.56, scaleX: 0.92, scaleY: 0.18
+  });
+  presentLabel = makeTextSprite('PRESENTE', {
+    fontSize: 30, weight: 750, fill: 'rgba(248,248,250,.96)', opacity: 1, scaleX: 1.08, scaleY: 0.20
+  });
+  futureLabel = makeTextSprite('FUTURO', {
+    fontSize: 29, weight: 650, fill: 'rgba(205,205,212,.52)', opacity: 0.56, scaleX: 0.92, scaleY: 0.18
+  });
+
+  const labelX = x - 0.88;
+  pastLabel.position.set(labelX, y0 + H * 0.25, z);
+  presentLabel.position.set(labelX, y0, z);
+  futureLabel.position.set(labelX, y0 + H * 0.75, z);
+  timeRulerGroup.add(pastLabel, presentLabel, futureLabel);
+
+  presentMarker = new THREE.Mesh(
+    new THREE.BoxGeometry(0.34, 0.018, 0.018),
+    new THREE.MeshBasicMaterial({ color: 0xf2f2f4, transparent: true, opacity: 0.92, depthTest: false, depthWrite: false })
+  );
+  presentMarker.position.set(x + 0.06, y0, z);
+  presentMarker.renderOrder = 41;
+  timeRulerGroup.add(presentMarker);
+
+  volume.add(timeRulerGroup);
+  updateTimeRuler();
+}
+
+function updateTimeRuler() {
+  if (!timeRulerGroup || !presentLabel || !pastLabel || !futureLabel || !presentMarker) return;
+  const H = state.timeH;
+  const y0 = -H / 2;
+  const y1 = H / 2;
+  const f = THREE.MathUtils.clamp(state.progress / Math.max(0.001, state.clipDuration), 0, 1);
+  const y = THREE.MathUtils.lerp(y0, y1, f);
+
+  presentLabel.position.y = y;
+  presentMarker.position.y = y;
+
+  const pastSpan = y - y0;
+  const futureSpan = y1 - y;
+  pastLabel.visible = pastSpan > H * 0.06;
+  futureLabel.visible = futureSpan > H * 0.06;
+
+  if (pastLabel.visible) pastLabel.position.y = y0 + pastSpan * 0.48;
+  if (futureLabel.visible) futureLabel.position.y = y + futureSpan * 0.52;
 }
 
 function resetView() {
@@ -656,6 +860,12 @@ function updateGridUI() {
   if (gridLines) gridLines.visible = on;
 }
 
+function updateFutureUI(rebuild = false) {
+  const on = futureToggle.checked;
+  futureOpacityBlock.classList.toggle('off', !on);
+  if (rebuild && atlasTexture) rebuildVolume(atlasTexture.userData.layout, false);
+}
+
 function updatePlayback(now) {
   const dt = Math.min(.05, (now - state.lastT) / 1000);
   state.lastT = now;
@@ -677,13 +887,19 @@ function updatePlayback(now) {
     sliceMaterial.uniforms.uRadius.value = Number(radiusSlider.value);
     sliceMaterial.uniforms.uStrength.value = Number(strengthSlider.value);
     sliceMaterial.uniforms.uBrightness.value = state.brightness;
+    sliceMaterial.uniforms.uFutureOn.value = futureToggle.checked ? 1 : 0;
+    sliceMaterial.uniforms.uFutureOpacity.value = state.futureOpacity;
   }
   if (sphere) sphere.visible = sphereToggle.checked;
   if (gridLines) {
     gridLines.visible = gridToggle.checked;
-    gridLines.material.opacity = state.gridOpacity;
+    gridLines.material.uniforms.uSphereOn.value = sphereToggle.checked ? 1 : 0;
+    gridLines.material.uniforms.uRadius.value = Number(radiusSlider.value);
+    gridLines.material.uniforms.uStrength.value = Number(strengthSlider.value);
+    gridLines.material.uniforms.uOpacity.value = state.gridOpacity;
   }
 
+  updateTimeRuler();
   controls.update();
   renderer.render(scene, camera);
   requestAnimationFrame(updatePlayback);
@@ -725,10 +941,17 @@ brightnessSlider.addEventListener('input', () => {
   brightnessOut.textContent = `${brightnessSlider.value}%`;
 });
 
+futureToggle.addEventListener('change', () => updateFutureUI(true));
+futureOpacitySlider.addEventListener('input', () => {
+  state.futureOpacity = Number(futureOpacitySlider.value) / 100;
+  futureOpacityOut.textContent = `${futureOpacitySlider.value}%`;
+  if (sliceMaterial) sliceMaterial.uniforms.uFutureOpacity.value = state.futureOpacity;
+});
+
 gridOpacitySlider.addEventListener('input', () => {
   state.gridOpacity = Number(gridOpacitySlider.value) / 100;
   gridOpacityOut.textContent = `${gridOpacitySlider.value}%`;
-  if (gridLines) gridLines.material.opacity = state.gridOpacity;
+  if (gridLines) gridLines.material.uniforms.uOpacity.value = state.gridOpacity;
 });
 
 gridToggle.addEventListener('change', updateGridUI);
@@ -781,9 +1004,11 @@ document.addEventListener('visibilitychange', () => {
 sphereToggle.checked = false;
 gridToggle.checked = false;
 state.brightness = Number(brightnessSlider.value) / 100;
+state.futureOpacity = Number(futureOpacitySlider.value) / 100;
 state.gridOpacity = Number(gridOpacitySlider.value) / 100;
 state.slices = Number(sliceSlider.value);
 setVisualMode('slices');
+updateFutureUI(false);
 updateGridUI();
 buildDemoAtlas();
 scrubber.max = state.clipDuration;
