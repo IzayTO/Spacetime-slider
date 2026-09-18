@@ -109,6 +109,71 @@
         <input id="gridOpacitySlider" type="range" min="0" max="100" step="1" value="20" />
       </div>
 
+
+      <div class="divider"></div>
+
+      <div class="control-title section-title">Etiquetas y guías</div>
+
+      <div class="control-row switch-row">
+        <div>
+          <div class="control-title">Presente · Futuro · Pasado</div>
+          <div class="control-sub">Muestra u oculta las palabras que describen el estado temporal</div>
+        </div>
+        <label class="switch"><input id="timeWordsToggle" type="checkbox" checked><span></span></label>
+      </div>
+
+      <div class="control-row switch-row">
+        <div>
+          <div class="control-title">Segundos y marcas</div>
+          <div class="control-sub">Muestra u oculta la regla lateral con 0 s, 1 s, 2 s...</div>
+        </div>
+        <label class="switch"><input id="secondMarksToggle" type="checkbox" checked><span></span></label>
+      </div>
+
+      <div class="control-row switch-row">
+        <div>
+          <div class="control-title">Coordenadas</div>
+          <div class="control-sub">Muestra u oculta los ejes X, Y, Z y la leyenda inferior</div>
+        </div>
+        <label class="switch"><input id="coordinatesToggle" type="checkbox" checked><span></span></label>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="control-title section-title">Plano del presente</div>
+
+      <div class="control-row switch-row">
+        <div>
+          <div class="control-title">Activar plano presente</div>
+          <div class="control-sub">Una capa adherida al fotograma actual para ubicar visualmente el presente</div>
+        </div>
+        <label class="switch"><input id="presentPlaneToggle" type="checkbox"><span></span></label>
+      </div>
+
+      <div id="presentPlaneControls" class="linked-control off">
+        <div class="slider-label"><span>Modo del plano</span><output id="presentPlaneModeOut">Sólido</output></div>
+        <div class="segmented" role="group" aria-label="Modo del plano presente">
+          <button id="presentPlaneSolidBtn" class="segment active" type="button">Sólido</button>
+          <button id="presentPlaneGridBtn" class="segment" type="button">Cuadrícula</button>
+        </div>
+
+        <div class="mini-grid single-row-grid">
+          <label>Color
+            <input id="presentPlaneColor" class="color-input" type="color" value="#f5f5f7">
+          </label>
+        </div>
+
+        <div class="slider-block">
+          <div class="slider-label"><span>Opacidad / solidez</span><output id="presentPlaneOpacityOut">18%</output></div>
+          <input id="presentPlaneOpacitySlider" type="range" min="0" max="80" step="1" value="18" />
+        </div>
+
+        <div class="slider-block">
+          <div class="slider-label"><span>Contorno / líneas</span><output id="presentPlaneOutlineOut">42%</output></div>
+          <input id="presentPlaneOutlineSlider" type="range" min="0" max="100" step="1" value="42" />
+        </div>
+      </div>
+
       <div class="slider-block">
         <div class="slider-label"><span>Rebanadas</span><output id="sliceOut">64</output></div>
         <input id="sliceSlider" type="range" min="24" max="160" step="4" value="64" />

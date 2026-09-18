@@ -41,6 +41,20 @@ const dropHint = $('dropHint');
 const status = $('status');
 const statusText = $('statusText');
 const statusBar = $('statusBar');
+const timeWordsToggle = $('timeWordsToggle');
+const secondMarksToggle = $('secondMarksToggle');
+const coordinatesToggle = $('coordinatesToggle');
+const presentPlaneToggle = $('presentPlaneToggle');
+const presentPlaneControls = $('presentPlaneControls');
+const presentPlaneSolidBtn = $('presentPlaneSolidBtn');
+const presentPlaneGridBtn = $('presentPlaneGridBtn');
+const presentPlaneModeOut = $('presentPlaneModeOut');
+const presentPlaneColorInput = $('presentPlaneColor');
+const presentPlaneOpacitySlider = $('presentPlaneOpacitySlider');
+const presentPlaneOutlineSlider = $('presentPlaneOutlineSlider');
+const presentPlaneOpacityOut = $('presentPlaneOpacityOut');
+const presentPlaneOutlineOut = $('presentPlaneOutlineOut');
+const axisLegendEl = document.querySelector('.axis-legend');
 
 const state = {
   clipStart: 0,
@@ -59,6 +73,14 @@ const state = {
   planeW: 5.6,
   planeD: 3.15,
   timeH: 4.4,
+  showTimeWords: true,
+  showSecondMarks: true,
+  showCoordinates: true,
+  presentPlaneOn: false,
+  presentPlaneMode: 'solid',
+  presentPlaneOpacity: 0.18,
+  presentPlaneOutlineOpacity: 0.42,
+  presentPlaneColor: '#f5f5f7',
 };
 
 const renderer = new THREE.WebGLRenderer({
@@ -111,6 +133,11 @@ let presentLabel = null;
 let pastLabel = null;
 let futureLabel = null;
 let presentMarker = null;
+let timeMarksGroup = null;
+let timeWordsGroup = null;
+let presentPlaneFill = null;
+let presentPlaneGrid = null;
+let presentPlaneOutline = null;
 
 const atlasCanvas = document.createElement('canvas');
 const atlasCtx = atlasCanvas.getContext('2d', { alpha: false, desynchronized: true });
@@ -144,6 +171,13 @@ function disposeObj(obj) {
     else child.material?.dispose?.();
   });
   obj.removeFromParent?.();
+}
+
+function hexToRgb01(hex) {
+  const clean = (hex || '#ffffff').replace('#', '');
+  const full = clean.length === 3 ? clean.split('').map(ch => ch + ch).join('') : clean.padEnd(6, 'f').slice(0, 6);
+  const num = parseInt(full, 16);
+  return [((num >> 16) & 255) / 255, ((num >> 8) & 255) / 255, (num & 255) / 255];
 }
 
 function makeAtlasLayout(count, aspect) {
@@ -271,7 +305,12 @@ function rebuildVolume(layout = atlasTexture?.userData.layout, resetCamera = fal
   disposeObj(sphere); sphere = null;
   disposeObj(axesGroup); axesGroup = null;
   disposeObj(timeRulerGroup); timeRulerGroup = null;
+  disposeObj(presentPlaneFill); presentPlaneFill = null;
+  disposeObj(presentPlaneGrid); presentPlaneGrid = null;
+  disposeObj(presentPlaneOutline); presentPlaneOutline = null;
   presentLabel = pastLabel = futureLabel = presentMarker = null;
+  timeMarksGroup = null;
+  timeWordsGroup = null;
 
   const count = state.slices;
   const mobile = matchMedia('(max-width: 760px)').matches;
@@ -444,6 +483,9 @@ function rebuildVolume(layout = atlasTexture?.userData.layout, resetCamera = fal
   buildSphere();
   buildAxes();
   buildTimeRuler();
+  buildPresentPlane();
+  updateCoordinateVisibility();
+  updateTimeInfoVisibility();
   if (resetCamera) resetView();
 }
 
@@ -560,6 +602,183 @@ function buildBoxAndGrid() {
   volume.add(gridLines);
 }
 
+function buildPresentPlane() {
+  const W = state.planeW * 1.10;
+  const D = state.planeD * 1.12;
+  const zShift = (D - state.planeD) * 0.5;
+  const segX = matchMedia('(max-width: 760px)').matches ? 18 : 24;
+  const segZ = Math.max(12, Math.round(segX / Math.max(0.55, state.aspect)));
+  const [r, g, b] = hexToRgb01(state.presentPlaneColor);
+
+  const planeGeo = new THREE.PlaneGeometry(W, D, segX, segZ);
+  planeGeo.rotateX(-Math.PI / 2);
+  planeGeo.translate(0, 0, zShift);
+
+  const deformVS = `
+    precision highp float;
+    uniform float uPresentY;
+    uniform float uSphereOn;
+    uniform float uRadius;
+    uniform float uStrength;
+    varying vec2 vUv;
+    void main(){
+      vec3 p = position + vec3(0.0, uPresentY, 0.0);
+      vec3 delta = -p;
+      float d = length(delta);
+      float q = clamp(1.0 - d / max(uRadius, 0.001), 0.0, 1.0);
+      float inf = q*q*(3.0-2.0*q) * uSphereOn;
+      vec3 dir = delta / max(d, 0.0001);
+      p += dir * inf * uStrength * uRadius * 0.38;
+      p.y += sign(-p.y) * inf * uStrength * uRadius * 0.10;
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+    }
+  `;
+
+  presentPlaneFill = new THREE.Mesh(
+    planeGeo,
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uPresentY: { value: 0 },
+        uSphereOn: { value: sphereToggle.checked ? 1 : 0 },
+        uRadius: { value: Number(radiusSlider.value) },
+        uStrength: { value: Number(strengthSlider.value) },
+        uColor: { value: new THREE.Vector3(r, g, b) },
+        uOpacity: { value: state.presentPlaneOpacity },
+      },
+      vertexShader: deformVS,
+      fragmentShader: `
+        precision highp float;
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        varying vec2 vUv;
+        void main(){
+          float edge = min(min(vUv.x, 1.0 - vUv.x), min(vUv.y, 1.0 - vUv.y));
+          float fade = smoothstep(0.0, 0.14, edge);
+          gl_FragColor = vec4(uColor, uOpacity * fade * 0.95);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+      blending: THREE.NormalBlending,
+    })
+  );
+  presentPlaneFill.renderOrder = 16;
+  presentPlaneFill.visible = state.presentPlaneOn && state.presentPlaneMode === 'solid';
+  volume.add(presentPlaneFill);
+
+  const gridPts = [];
+  const gx = 8, gz = 8;
+  for (let ix = 0; ix <= gx; ix++) {
+    const x = -W / 2 + W * ix / gx;
+    gridPts.push(x, 0, -D / 2 + zShift, x, 0, D / 2 + zShift);
+  }
+  for (let iz = 0; iz <= gz; iz++) {
+    const z = -D / 2 + zShift + D * iz / gz;
+    gridPts.push(-W / 2, 0, z, W / 2, 0, z);
+  }
+  const gridGeo = new THREE.BufferGeometry();
+  gridGeo.setAttribute('position', new THREE.Float32BufferAttribute(gridPts, 3));
+  presentPlaneGrid = new THREE.LineSegments(
+    gridGeo,
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uPresentY: { value: 0 },
+        uSphereOn: { value: sphereToggle.checked ? 1 : 0 },
+        uRadius: { value: Number(radiusSlider.value) },
+        uStrength: { value: Number(strengthSlider.value) },
+        uColor: { value: new THREE.Vector3(r, g, b) },
+        uOpacity: { value: state.presentPlaneOpacity },
+      },
+      vertexShader: `
+        precision highp float;
+        uniform float uPresentY;
+        uniform float uSphereOn;
+        uniform float uRadius;
+        uniform float uStrength;
+        void main(){
+          vec3 p = position + vec3(0.0, uPresentY, 0.0);
+          vec3 delta = -p;
+          float d = length(delta);
+          float q = clamp(1.0 - d / max(uRadius, 0.001), 0.0, 1.0);
+          float inf = q*q*(3.0-2.0*q) * uSphereOn;
+          vec3 dir = delta / max(d, 0.0001);
+          p += dir * inf * uStrength * uRadius * 0.38;
+          p.y += sign(-p.y) * inf * uStrength * uRadius * 0.10;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        void main(){ gl_FragColor = vec4(uColor, uOpacity); }
+      `,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.NormalBlending,
+    })
+  );
+  presentPlaneGrid.renderOrder = 17;
+  presentPlaneGrid.visible = state.presentPlaneOn && state.presentPlaneMode === 'grid';
+  volume.add(presentPlaneGrid);
+
+  const outlineGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(W, 0.001, D).translate(0, 0, zShift));
+  presentPlaneOutline = new THREE.LineSegments(
+    outlineGeo,
+    new THREE.ShaderMaterial({
+      uniforms: {
+        uPresentY: { value: 0 },
+        uSphereOn: { value: sphereToggle.checked ? 1 : 0 },
+        uRadius: { value: Number(radiusSlider.value) },
+        uStrength: { value: Number(strengthSlider.value) },
+        uColor: { value: new THREE.Vector3(r, g, b) },
+        uOpacity: { value: state.presentPlaneOutlineOpacity },
+      },
+      vertexShader: `
+        precision highp float;
+        uniform float uPresentY;
+        uniform float uSphereOn;
+        uniform float uRadius;
+        uniform float uStrength;
+        void main(){
+          vec3 p = position + vec3(0.0, uPresentY, 0.0);
+          vec3 delta = -p;
+          float d = length(delta);
+          float q = clamp(1.0 - d / max(uRadius, 0.001), 0.0, 1.0);
+          float inf = q*q*(3.0-2.0*q) * uSphereOn;
+          vec3 dir = delta / max(d, 0.0001);
+          p += dir * inf * uStrength * uRadius * 0.38;
+          p.y += sign(-p.y) * inf * uStrength * uRadius * 0.10;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        uniform vec3 uColor;
+        uniform float uOpacity;
+        void main(){ gl_FragColor = vec4(uColor, uOpacity); }
+      `,
+      transparent: true,
+      depthWrite: false,
+      depthTest: false,
+      blending: THREE.NormalBlending,
+    })
+  );
+  presentPlaneOutline.renderOrder = 18;
+  presentPlaneOutline.visible = state.presentPlaneOn;
+  volume.add(presentPlaneOutline);
+
+  updatePresentPlaneVisibility();
+  updatePresentPlanePosition();
+}
+
 function buildSphere() {
   const r = 0.28;
   sphere = new THREE.Mesh(
@@ -634,8 +853,11 @@ function buildAxes() {
 
 function buildTimeRuler() {
   timeRulerGroup = new THREE.Group();
+  timeMarksGroup = new THREE.Group();
+  timeWordsGroup = new THREE.Group();
+
   const W = state.planeW, H = state.timeH, D = state.planeD;
-  const x = -W / 2 - 0.42;
+  const x = -W / 2 - 0.44;
   const z = D / 2 + 0.12;
   const y0 = -H / 2;
   const y1 = H / 2;
@@ -643,7 +865,7 @@ function buildTimeRuler() {
   const lineMat = new THREE.LineBasicMaterial({
     color: 0xb9b9c0,
     transparent: true,
-    opacity: 0.46,
+    opacity: 0.52,
     depthWrite: false,
     depthTest: false
   });
@@ -657,49 +879,50 @@ function buildTimeRuler() {
   for (const t of tickTimes) {
     const f = THREE.MathUtils.clamp(t / dur, 0, 1);
     const y = THREE.MathUtils.lerp(y0, y1, f);
-    pts.push(new THREE.Vector3(x - 0.10, y, z), new THREE.Vector3(x + 0.13, y, z));
+    pts.push(new THREE.Vector3(x - 0.12, y, z), new THREE.Vector3(x + 0.14, y, z));
 
     const label = makeTextSprite(`${Number.isInteger(t) ? t.toFixed(0) : t.toFixed(1)} s`, {
-      fontSize: 27,
-      weight: 500,
-      fill: 'rgba(210,210,216,.68)',
-      opacity: 0.82,
-      scaleX: 0.72,
-      scaleY: 0.16
+      fontSize: 31,
+      weight: 560,
+      fill: 'rgba(214,214,220,.76)',
+      opacity: 0.9,
+      scaleX: 0.88,
+      scaleY: 0.20
     });
-    label.position.set(x - 0.48, y, z);
-    timeRulerGroup.add(label);
+    label.position.set(x - 0.56, y, z);
+    timeMarksGroup.add(label);
   }
 
   const g = new THREE.BufferGeometry().setFromPoints(pts);
   const line = new THREE.LineSegments(g, lineMat);
   line.renderOrder = 40;
-  timeRulerGroup.add(line);
+  timeMarksGroup.add(line);
 
   pastLabel = makeTextSprite('PASADO', {
-    fontSize: 29, weight: 650, fill: 'rgba(205,205,212,.52)', opacity: 0.56, scaleX: 0.92, scaleY: 0.18
+    fontSize: 32, weight: 670, fill: 'rgba(205,205,212,.54)', opacity: 0.58, scaleX: 1.02, scaleY: 0.22
   });
   presentLabel = makeTextSprite('PRESENTE', {
-    fontSize: 30, weight: 750, fill: 'rgba(248,248,250,.96)', opacity: 1, scaleX: 1.08, scaleY: 0.20
+    fontSize: 35, weight: 760, fill: 'rgba(248,248,250,.98)', opacity: 1, scaleX: 1.22, scaleY: 0.25
   });
   futureLabel = makeTextSprite('FUTURO', {
-    fontSize: 29, weight: 650, fill: 'rgba(205,205,212,.52)', opacity: 0.56, scaleX: 0.92, scaleY: 0.18
+    fontSize: 32, weight: 670, fill: 'rgba(205,205,212,.54)', opacity: 0.58, scaleX: 1.02, scaleY: 0.22
   });
 
-  const labelX = x - 0.88;
+  const labelX = x - 1.08;
   pastLabel.position.set(labelX, y0 + H * 0.25, z);
   presentLabel.position.set(labelX, y0, z);
   futureLabel.position.set(labelX, y0 + H * 0.75, z);
-  timeRulerGroup.add(pastLabel, presentLabel, futureLabel);
+  timeWordsGroup.add(pastLabel, presentLabel, futureLabel);
 
   presentMarker = new THREE.Mesh(
-    new THREE.BoxGeometry(0.34, 0.018, 0.018),
-    new THREE.MeshBasicMaterial({ color: 0xf2f2f4, transparent: true, opacity: 0.92, depthTest: false, depthWrite: false })
+    new THREE.BoxGeometry(0.38, 0.022, 0.022),
+    new THREE.MeshBasicMaterial({ color: 0xf2f2f4, transparent: true, opacity: 0.95, depthTest: false, depthWrite: false })
   );
-  presentMarker.position.set(x + 0.06, y0, z);
+  presentMarker.position.set(x + 0.07, y0, z);
   presentMarker.renderOrder = 41;
-  timeRulerGroup.add(presentMarker);
+  timeWordsGroup.add(presentMarker);
 
+  timeRulerGroup.add(timeMarksGroup, timeWordsGroup);
   volume.add(timeRulerGroup);
   updateTimeRuler();
 }
@@ -717,11 +940,77 @@ function updateTimeRuler() {
 
   const pastSpan = y - y0;
   const futureSpan = y1 - y;
-  pastLabel.visible = pastSpan > H * 0.06;
-  futureLabel.visible = futureSpan > H * 0.06;
+  pastLabel.visible = state.showTimeWords && pastSpan > H * 0.06;
+  futureLabel.visible = state.showTimeWords && futureSpan > H * 0.06;
+  presentLabel.visible = state.showTimeWords;
+  presentMarker.visible = state.showTimeWords;
 
   if (pastLabel.visible) pastLabel.position.y = y0 + pastSpan * 0.48;
   if (futureLabel.visible) futureLabel.position.y = y + futureSpan * 0.52;
+
+  if (timeMarksGroup) timeMarksGroup.visible = state.showSecondMarks;
+  if (timeWordsGroup) timeWordsGroup.visible = state.showTimeWords;
+}
+
+function updateCoordinateVisibility() {
+  state.showCoordinates = coordinatesToggle.checked;
+  if (axesGroup) axesGroup.visible = state.showCoordinates;
+  if (axisLegendEl) axisLegendEl.style.display = state.showCoordinates ? '' : 'none';
+}
+
+function updateTimeInfoVisibility() {
+  state.showTimeWords = timeWordsToggle.checked;
+  state.showSecondMarks = secondMarksToggle.checked;
+  if (timeMarksGroup) timeMarksGroup.visible = state.showSecondMarks;
+  if (timeWordsGroup) timeWordsGroup.visible = state.showTimeWords;
+  updateTimeRuler();
+}
+
+function setPresentPlaneMode(mode) {
+  if (mode !== 'solid' && mode !== 'grid') return;
+  state.presentPlaneMode = mode;
+  presentPlaneSolidBtn.classList.toggle('active', mode === 'solid');
+  presentPlaneGridBtn.classList.toggle('active', mode === 'grid');
+  presentPlaneModeOut.textContent = mode === 'grid' ? 'Cuadrícula' : 'Sólido';
+  updatePresentPlaneVisibility();
+}
+
+function updatePresentPlaneControlsUI() {
+  state.presentPlaneOn = presentPlaneToggle.checked;
+  presentPlaneControls.classList.toggle('off', !state.presentPlaneOn);
+  updatePresentPlaneVisibility();
+}
+
+function updatePresentPlaneVisibility() {
+  const on = state.presentPlaneOn;
+  if (presentPlaneFill) presentPlaneFill.visible = on && state.presentPlaneMode === 'solid';
+  if (presentPlaneGrid) presentPlaneGrid.visible = on && state.presentPlaneMode === 'grid';
+  if (presentPlaneOutline) presentPlaneOutline.visible = on;
+}
+
+function updatePresentPlanePosition() {
+  const y = THREE.MathUtils.lerp(-state.timeH / 2, state.timeH / 2, THREE.MathUtils.clamp(state.progress / Math.max(0.001, state.clipDuration), 0, 1));
+  const objs = [presentPlaneFill, presentPlaneGrid, presentPlaneOutline];
+  for (const obj of objs) {
+    if (!obj?.material?.uniforms) continue;
+    obj.material.uniforms.uPresentY.value = y + 0.006;
+    obj.material.uniforms.uSphereOn.value = sphereToggle.checked ? 1 : 0;
+    obj.material.uniforms.uRadius.value = Number(radiusSlider.value);
+    obj.material.uniforms.uStrength.value = Number(strengthSlider.value);
+    if (obj === presentPlaneFill) {
+      obj.material.uniforms.uOpacity.value = state.presentPlaneOpacity;
+      const [r, g, b] = hexToRgb01(state.presentPlaneColor);
+      obj.material.uniforms.uColor.value.set(r, g, b);
+    } else if (obj === presentPlaneGrid) {
+      obj.material.uniforms.uOpacity.value = Math.max(state.presentPlaneOpacity, 0.05);
+      const [r, g, b] = hexToRgb01(state.presentPlaneColor);
+      obj.material.uniforms.uColor.value.set(r, g, b);
+    } else if (obj === presentPlaneOutline) {
+      obj.material.uniforms.uOpacity.value = state.presentPlaneOutlineOpacity;
+      const [r, g, b] = hexToRgb01(state.presentPlaneColor);
+      obj.material.uniforms.uColor.value.set(r, g, b);
+    }
+  }
 }
 
 function resetView() {
@@ -899,6 +1188,7 @@ function updatePlayback(now) {
     gridLines.material.uniforms.uOpacity.value = state.gridOpacity;
   }
 
+  updatePresentPlanePosition();
   updateTimeRuler();
   controls.update();
   renderer.render(scene, camera);
@@ -956,6 +1246,28 @@ gridOpacitySlider.addEventListener('input', () => {
 
 gridToggle.addEventListener('change', updateGridUI);
 
+timeWordsToggle.addEventListener('change', updateTimeInfoVisibility);
+secondMarksToggle.addEventListener('change', updateTimeInfoVisibility);
+coordinatesToggle.addEventListener('change', updateCoordinateVisibility);
+
+presentPlaneToggle.addEventListener('change', updatePresentPlaneControlsUI);
+presentPlaneSolidBtn.addEventListener('click', () => setPresentPlaneMode('solid'));
+presentPlaneGridBtn.addEventListener('click', () => setPresentPlaneMode('grid'));
+presentPlaneColorInput.addEventListener('input', () => {
+  state.presentPlaneColor = presentPlaneColorInput.value;
+  updatePresentPlanePosition();
+});
+presentPlaneOpacitySlider.addEventListener('input', () => {
+  state.presentPlaneOpacity = Number(presentPlaneOpacitySlider.value) / 100;
+  presentPlaneOpacityOut.textContent = `${presentPlaneOpacitySlider.value}%`;
+  updatePresentPlanePosition();
+});
+presentPlaneOutlineSlider.addEventListener('input', () => {
+  state.presentPlaneOutlineOpacity = Number(presentPlaneOutlineSlider.value) / 100;
+  presentPlaneOutlineOut.textContent = `${presentPlaneOutlineSlider.value}%`;
+  updatePresentPlanePosition();
+});
+
 sliceSlider.addEventListener('input', () => {
   sliceOut.textContent = sliceSlider.value;
 });
@@ -1003,13 +1315,24 @@ document.addEventListener('visibilitychange', () => {
 
 sphereToggle.checked = false;
 gridToggle.checked = false;
+timeWordsToggle.checked = true;
+secondMarksToggle.checked = true;
+coordinatesToggle.checked = true;
+presentPlaneToggle.checked = false;
 state.brightness = Number(brightnessSlider.value) / 100;
 state.futureOpacity = Number(futureOpacitySlider.value) / 100;
 state.gridOpacity = Number(gridOpacitySlider.value) / 100;
 state.slices = Number(sliceSlider.value);
+state.presentPlaneOpacity = Number(presentPlaneOpacitySlider.value) / 100;
+state.presentPlaneOutlineOpacity = Number(presentPlaneOutlineSlider.value) / 100;
+state.presentPlaneColor = presentPlaneColorInput.value;
+presentPlaneOpacityOut.textContent = `${presentPlaneOpacitySlider.value}%`;
+presentPlaneOutlineOut.textContent = `${presentPlaneOutlineSlider.value}%`;
 setVisualMode('slices');
+setPresentPlaneMode('solid');
 updateFutureUI(false);
 updateGridUI();
+updatePresentPlaneControlsUI();
 buildDemoAtlas();
 scrubber.max = state.clipDuration;
 totalTimeEl.textContent = `${state.clipDuration.toFixed(1)} s`;
