@@ -1587,7 +1587,7 @@ function setOrbitalOpen(open) {
   if (!orbitalNav || !orbitalToggle) return;
   orbitalNav.classList.toggle('open', !!open);
   orbitalToggle.setAttribute('aria-label', open ? 'Cerrar menú orbital' : 'Abrir menú orbital');
-  orbitalToggle.querySelector('.orbital-core-mark').textContent = '+';
+  orbitalToggle.querySelector('.orbital-core-mark').textContent = open ? '×' : '+';
 }
 
 function closeOrbital() { setOrbitalOpen(false); }
@@ -1651,7 +1651,7 @@ function syncPanelWindow(target = 'video') {
   const labelMap = {
     video: ['CAPAS', 'Video y tiempo'],
     gravity: ['CAPAS', 'Gravedad y cuadrícula'],
-    guides: ['CAPAS', 'Guías y plano presente'],
+    guides: ['CAPAS', 'Rebanadas'],
     clip: ['CAPAS', 'Recorte temporal'],
   };
   state.activePanelTarget = target;

@@ -46,20 +46,22 @@
 
     <button id="panelToggle" class="panel-toggle glass" aria-label="Abrir controles">☰</button>
 
-    <nav id="orbitalNav" class="orbital-nav" aria-label="Carrusel de controles">
-      <div class="orbital-carousel glass" aria-label="Opciones de visualización">
-        <button id="orbitalPrev" class="orbital-arrow" type="button" aria-label="Opción anterior">‹</button>
-        <div id="orbitalViewport" class="orbital-viewport">
-          <div id="orbitalTrack" class="orbital-track">
-            <button class="orbital-item" data-panel-target="video" type="button"><span class="orbital-glyph">◷</span><em>Tiempo</em></button>
-            <button class="orbital-item" data-panel-target="gravity" type="button"><span class="orbital-glyph">◌</span><em>Gravedad</em></button>
-            <button class="orbital-item" data-panel-target="guides" type="button"><span class="orbital-glyph">⌁</span><em>Guías</em></button>
-            <button class="orbital-item" data-panel-target="clip" type="button"><span class="orbital-glyph">▣</span><em>Recorte</em></button>
-          </div>
-        </div>
-        <button id="orbitalNext" class="orbital-arrow" type="button" aria-label="Opción siguiente">›</button>
+    <nav id="orbitalNav" class="orbital-nav" aria-label="Menú de controles">
+      <div class="orbital-row" aria-label="Opciones de visualización">
+        <button class="orbital-item" data-panel-target="video" type="button" aria-label="Tiempo">
+          <span class="orbital-circle glass"><span class="orbital-glyph">◷</span></span><em>Tiempo</em>
+        </button>
+        <button class="orbital-item" data-panel-target="guides" type="button" aria-label="Rebanadas">
+          <span class="orbital-circle glass"><span class="orbital-glyph">▤</span></span><em>Rebanadas</em>
+        </button>
+        <button class="orbital-item" data-panel-target="gravity" type="button" aria-label="Gravedad">
+          <span class="orbital-circle glass"><span class="orbital-glyph">◌</span></span><em>Gravedad</em>
+        </button>
+        <button class="orbital-item" data-panel-target="clip" type="button" aria-label="Recorte">
+          <span class="orbital-circle glass"><span class="orbital-glyph">▣</span></span><em>Recorte</em>
+        </button>
       </div>
-      <button id="orbitalToggle" class="orbital-core glass" type="button" aria-label="Abrir carrusel de controles">
+      <button id="orbitalToggle" class="orbital-core glass" type="button" aria-label="Abrir menú de controles">
         <span class="orbital-core-mark">+</span>
       </button>
     </nav>
