@@ -58,6 +58,9 @@ const homeDemoBtn = $('homeDemoBtn');
 const sectionVideo = $('sectionVideo');
 const sectionGravity = $('sectionGravity');
 const sectionGuides = $('sectionGuides');
+const panelTitleEl = $('panelTitle');
+const panelEyebrowEl = $('panelEyebrow');
+const panelWindows = [...document.querySelectorAll('.panel-window')];
 const status = $('status');
 const statusText = $('statusText');
 const statusBar = $('statusBar');
@@ -1545,26 +1548,33 @@ function setOrbitalOpen(open) {
   if (!orbitalNav || !orbitalToggle) return;
   orbitalNav.classList.toggle('open', !!open);
   orbitalToggle.setAttribute('aria-label', open ? 'Cerrar menú orbital' : 'Abrir menú orbital');
-  orbitalToggle.querySelector('.orbital-core-mark').textContent = open ? '✕' : '◎';
+  orbitalToggle.querySelector('.orbital-core-mark').textContent = open ? '×' : '+';
 }
 
 function closeOrbital() { setOrbitalOpen(false); }
 
-function openPanelSection(target = 'video') {
-  panel.classList.add('open');
-  const map = {
-    video: sectionVideo,
-    gravity: sectionGravity,
-    guides: sectionGuides,
-    clip: clipSettings,
+function syncPanelWindow(target = 'video') {
+  const labelMap = {
+    video: ['CAPAS', 'Video y tiempo'],
+    gravity: ['CAPAS', 'Gravedad y cuadrícula'],
+    guides: ['CAPAS', 'Guías y plano presente'],
+    clip: ['CAPAS', 'Recorte temporal'],
   };
-  [sectionVideo, sectionGravity, sectionGuides].forEach(sec => {
-    if (!sec) return;
-    sec.open = (sec === map[target]) || (target === 'clip' ? sec.open : false);
+  state.activePanelTarget = target;
+  panelWindows.forEach(win => {
+    const active = win.dataset.window === target;
+    win.classList.toggle('active', active);
+    if (win.tagName === 'DETAILS') win.open = true;
   });
-  const node = map[target] || panel;
-  requestAnimationFrame(() => node?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
+  const [eyebrow, title] = labelMap[target] || labelMap.video;
+  if (panelEyebrowEl) panelEyebrowEl.textContent = eyebrow;
+  if (panelTitleEl) panelTitleEl.textContent = title;
   orbitalItems.forEach(btn => btn.classList.toggle('active', btn.dataset.panelTarget === target));
+}
+
+function openPanelSection(target = 'video') {
+  syncPanelWindow(target);
+  panel.classList.add('open');
 }
 
 function closePanelUI() {
@@ -1687,7 +1697,7 @@ sliceSlider.addEventListener('change', () => {
 modeSlicesBtn.addEventListener('click', () => setVisualMode('slices'));
 modeSolidBtn.addEventListener('click', () => setVisualMode('solid'));
 resetViewBtn.addEventListener('click', resetView);
-panelToggle.addEventListener('click', () => panel.classList.toggle('open'));
+panelToggle.addEventListener('click', () => panel.classList.contains('open') ? closePanelUI() : openPanelSection(state.activePanelTarget || 'video'));
 closePanel.addEventListener('click', closePanelUI);
 orbitalToggle?.addEventListener('click', () => setOrbitalOpen(!orbitalNav.classList.contains('open')));
 orbitalItems.forEach(btn => btn.addEventListener('click', () => {
@@ -1697,7 +1707,7 @@ orbitalItems.forEach(btn => btn.addEventListener('click', () => {
 homeLoadBtn?.addEventListener('click', () => input.click());
 homeControlsBtn?.addEventListener('click', () => {
   openPanelSection('video');
-  setOrbitalOpen(true);
+  if (matchMedia('(max-width: 760px) and (orientation: portrait)').matches) setOrbitalOpen(true);
 });
 homeDemoBtn?.addEventListener('click', () => {
   state.hasVideo = false;
@@ -1776,6 +1786,7 @@ buildTrimTicks();
 syncTrimUI();
 initHomeVisualState();
 setOrbitalOpen(false);
+syncPanelWindow('video');
 buildDemoAtlas();
 scrubber.max = state.clipDuration;
 totalTimeEl.textContent = `${state.clipDuration.toFixed(1)} s`;

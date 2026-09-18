@@ -113,3 +113,40 @@ body.is-processing .panel-toggle{pointer-events:none;opacity:.58}
   .orbital-nav.open .orbital-item:nth-of-type(4){transform:translate3d(-116px,118px,0) scale(1)}
   .orbital-nav.open .orbital-item:nth-of-type(5){transform:translate3d(-96px,176px,0) scale(1)}
 }
+
+/* V10: panel por ventana + menú orbital circular */
+.panel-head{display:grid;grid-template-columns:auto 1fr;align-items:center;gap:10px}
+.panel-title{margin-top:2px}
+.panel-window{display:none}
+.panel-window.active{display:block}
+.panel-window>summary{display:none}
+.panel-window .accordion-body{padding-top:0}
+#clipSettings.panel-window{margin-top:0}
+#clipSettingsHome,.panel .divider:first-of-type{display:none}
+
+@media (max-width:760px) and (orientation:portrait){
+  .panel{padding:14px 14px 16px}
+  .panel-head{margin-bottom:10px;position:sticky;top:-1px;padding-bottom:8px;background:linear-gradient(180deg,rgba(12,13,18,.98),rgba(12,13,18,.92));backdrop-filter:blur(12px);z-index:1}
+  .panel-head .icon-btn{justify-self:start}
+  .panel .science-note{margin-top:12px}
+
+  .orbital-nav{width:82px;height:82px;right:max(8px,env(safe-area-inset-right));top:126px}
+  .orbital-core{width:68px;height:68px;font-size:28px}
+  .orbital-item{width:62px;min-width:62px;height:62px;padding:0;border-radius:50%;display:grid;place-items:center;right:10px;top:10px;box-shadow:0 10px 26px rgba(0,0,0,.24)}
+  .orbital-glyph{width:auto;height:auto;border-radius:0;background:transparent;font-size:20px;opacity:.95}
+  .orbital-item em{position:absolute;top:67px;left:50%;transform:translateX(-50%);font-style:normal;font-size:10px;font-weight:700;letter-spacing:.01em;color:#ececf0;white-space:nowrap;text-shadow:0 1px 4px rgba(0,0,0,.4)}
+  .orbital-nav.open .orbital-item:nth-of-type(2){transform:translate3d(-108px,0,0) scale(1)}
+  .orbital-nav.open .orbital-item:nth-of-type(3){transform:translate3d(-138px,74px,0) scale(1)}
+  .orbital-nav.open .orbital-item:nth-of-type(4){transform:translate3d(-124px,154px,0) scale(1)}
+  .orbital-nav.open .orbital-item:nth-of-type(5){transform:translate3d(-72px,226px,0) scale(1)}
+  .orbital-item.active{border-color:rgba(174,198,255,.34);background:rgba(18,22,31,.98)}
+  .orbital-item.active .orbital-glyph{transform:scale(1.06)}
+}
+
+@media (max-width:420px){
+  .orbital-nav{top:118px}
+  .orbital-nav.open .orbital-item:nth-of-type(2){transform:translate3d(-98px,0,0) scale(1)}
+  .orbital-nav.open .orbital-item:nth-of-type(3){transform:translate3d(-126px,68px,0) scale(1)}
+  .orbital-nav.open .orbital-item:nth-of-type(4){transform:translate3d(-114px,142px,0) scale(1)}
+  .orbital-nav.open .orbital-item:nth-of-type(5){transform:translate3d(-68px,208px,0) scale(1)}
+}

@@ -59,14 +59,14 @@
 
     <aside id="panel" class="panel glass">
       <div class="panel-head">
-        <div>
-          <div class="eyebrow">CAPAS</div>
-          <div class="panel-title">Espacio-tiempo</div>
-        </div>
         <button id="closePanel" class="icon-btn mobile-only" aria-label="Cerrar controles">×</button>
+        <div>
+          <div id="panelEyebrow" class="eyebrow">CAPAS</div>
+          <div id="panelTitle" class="panel-title">Espacio-tiempo</div>
+        </div>
       </div>
 
-      <details id="sectionVideo" class="control-accordion" open>
+      <details id="sectionVideo" class="control-accordion panel-window" data-window="video" data-title="Video y tiempo" open>
         <summary><span>Video y tiempo</span><i>⌄</i></summary>
         <div class="accordion-body">
       <div class="mode-block">
@@ -100,7 +100,7 @@
         </div>
       </details>
 
-      <details id="sectionGravity" class="control-accordion">
+      <details id="sectionGravity" class="control-accordion panel-window" data-window="gravity" data-title="Gravedad y cuadrícula" open>
         <summary><span>Gravedad y cuadrícula</span><i>⌄</i></summary>
         <div class="accordion-body">
 
@@ -139,7 +139,7 @@
         </div>
       </details>
 
-      <details id="sectionGuides" class="control-accordion">
+      <details id="sectionGuides" class="control-accordion panel-window" data-window="guides" data-title="Guías y plano presente" open>
         <summary><span>Guías y plano presente</span><i>⌄</i></summary>
         <div class="accordion-body">
 
@@ -218,7 +218,7 @@
       <div class="divider"></div>
 
       <div id="clipSettingsHome"></div>
-      <div id="clipSettings" class="clip-settings">
+      <div id="clipSettings" class="clip-settings panel-window" data-window="clip" data-title="Recorte temporal">
         <div class="clip-head-row">
           <div>
             <div class="control-title">Recorte temporal</div>
