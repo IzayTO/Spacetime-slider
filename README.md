@@ -1,19 +1,25 @@
 # Espacio × Tiempo
 
-Visualizador WebGL conceptual de un video como volumen de espacio-tiempo.
+Visualizador web 3D que convierte un clip de video en un volumen temporal: cada fotograma se coloca a una altura distinta y el eje vertical representa el tiempo.
 
-- X visual = tiempo, de abajo hacia arriba.
-- Y/Z = las dos dimensiones espaciales del fotograma.
-- El video se muestrea en rebanadas temporales y se empaqueta en un solo atlas de textura.
-- Las rebanadas se dibujan mediante instancing para reducir draw calls.
-- La esfera opcional deforma directamente la geometría de los fotogramas alrededor de un radio local. No usa líneas verdes para fingir la deformación.
-- Cuadrícula 3D neutra, opcional y apagada por defecto.
-- Rotar con un dedo/ratón; pellizcar para zoom; dos dedos para zoom + paneo.
-- Barra inferior para avanzar y retroceder por el clip.
+## Archivos
 
-## Uso
+- `index.html` — interfaz.
+- `style.css` — diseño.
+- `app.js` — Three.js, captura de fotogramas, modos de render y deformación.
 
-Abre `index.html` desde un servidor estático (GitHub Pages, Live Server, `python -m http.server`, etc.).
-Three.js se carga desde jsDelivr.
+## Novedades de esta versión
 
-La deformación es pedagógica/intuitiva, no una solución numérica de las ecuaciones de Einstein.
+- Modo **Rebanadas**: capas semitransparentes con el fotograma actual casi sólido.
+- Modo **Sólido**: cada fotograma tiene grosor temporal; los laterales muestran los bordes de los fotogramas apilados para que el volumen siga siendo visible de perfil.
+- El fotograma de `0.0 s` ya aparece visible desde el inicio.
+- Brillo del video ajustable entre 50 % y 220 %.
+- Cuadrícula 3D con interruptor y opacidad ajustable de 0 % a 100 %.
+- Hasta 160 rebanadas para un perfil temporal más suave.
+- Mayor subdivisión geométrica para que la deformación alrededor de la esfera sea más limpia.
+
+## GitHub Pages
+
+Sube `index.html`, `style.css` y `app.js` juntos a la raíz del repositorio. En GitHub Pages usa la rama `main` y la carpeta `/(root)`.
+
+La página carga Three.js desde jsDelivr, por lo que necesita conexión a internet para iniciar.

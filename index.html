@@ -36,7 +36,7 @@
 
     <section id="dropHint" class="drop-hint glass">
       <div class="drop-title">Arrastra un video aquí</div>
-      <div class="drop-sub">o toca “Cargar video”. Se usan solo fotogramas locales del navegador.</div>
+      <div class="drop-sub">o toca “Cargar video”. El video se procesa localmente en tu navegador.</div>
     </section>
 
     <button id="panelToggle" class="panel-toggle glass" aria-label="Abrir controles">☰</button>
@@ -50,20 +50,26 @@
         <button id="closePanel" class="icon-btn mobile-only" aria-label="Cerrar controles">×</button>
       </div>
 
-      <div class="control-row switch-row">
-        <div>
-          <div class="control-title">Esfera</div>
-          <div class="control-sub">Deformación local</div>
+      <div class="mode-block">
+        <div class="slider-label"><span>Visualización</span><output id="modeOut">Rebanadas</output></div>
+        <div class="segmented" role="group" aria-label="Modo de visualización">
+          <button id="modeSlicesBtn" class="segment active" type="button">Rebanadas</button>
+          <button id="modeSolidBtn" class="segment" type="button">Sólido</button>
         </div>
-        <label class="switch"><input id="sphereToggle" type="checkbox"><span></span></label>
+        <p class="mini-note">Sólido da grosor temporal a cada fotograma para que el volumen también se vea de perfil.</p>
+      </div>
+
+      <div class="slider-block">
+        <div class="slider-label"><span>Brillo del video</span><output id="brightnessOut">100%</output></div>
+        <input id="brightnessSlider" type="range" min="50" max="220" step="1" value="100" />
       </div>
 
       <div class="control-row switch-row">
         <div>
-          <div class="control-title">Cuadrícula 3D</div>
-          <div class="control-sub">Referencia espacial neutra</div>
+          <div class="control-title">Esfera</div>
+          <div class="control-sub">Deforma los fotogramas dentro de su radio</div>
         </div>
-        <label class="switch"><input id="gridToggle" type="checkbox"><span></span></label>
+        <label class="switch"><input id="sphereToggle" type="checkbox"><span></span></label>
       </div>
 
       <div class="slider-block">
@@ -76,9 +82,23 @@
         <input id="strengthSlider" type="range" min="0" max="1.35" step="0.01" value="0.72" />
       </div>
 
+      <div class="control-row switch-row">
+        <div>
+          <div class="control-title">Cuadrícula 3D</div>
+          <div class="control-sub">Referencia espacial neutra</div>
+        </div>
+        <label class="switch"><input id="gridToggle" type="checkbox"><span></span></label>
+      </div>
+
+      <div id="gridOpacityBlock" class="slider-block linked-control">
+        <div class="slider-label"><span>Opacidad cuadrícula</span><output id="gridOpacityOut">20%</output></div>
+        <input id="gridOpacitySlider" type="range" min="0" max="100" step="1" value="20" />
+      </div>
+
       <div class="slider-block">
-        <div class="slider-label"><span>Rebanadas</span><output id="sliceOut">44</output></div>
-        <input id="sliceSlider" type="range" min="20" max="72" step="4" value="44" />
+        <div class="slider-label"><span>Rebanadas</span><output id="sliceOut">64</output></div>
+        <input id="sliceSlider" type="range" min="24" max="160" step="4" value="64" />
+        <p class="mini-note">Más rebanadas suavizan el perfil temporal, pero tardan más en procesarse.</p>
       </div>
 
       <div class="divider"></div>
@@ -93,7 +113,7 @@
       </div>
 
       <div class="science-note">
-        La deformación es una metáfora geométrica interactiva. Sirve para visualizar dilatación temporal, no para resolver una métrica relativista exacta.
+        La deformación es una metáfora geométrica interactiva para visualizar dilatación temporal. No es una solución numérica exacta de una métrica relativista.
       </div>
     </aside>
 
