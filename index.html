@@ -182,19 +182,75 @@
 
       <div class="divider"></div>
 
-      <div class="clip-settings">
-        <div class="control-title">Clip temporal</div>
-        <div class="mini-grid">
-          <label>Inicio <input id="clipStart" type="number" min="0" step="0.1" value="0"></label>
-          <label>Duración <input id="clipDuration" type="number" min="1" max="8" step="0.1" value="5"></label>
+      <div id="clipSettingsHome"></div>
+      <div id="clipSettings" class="clip-settings">
+        <div class="clip-head-row">
+          <div>
+            <div class="control-title">Recorte temporal</div>
+            <div class="control-sub">Selecciona hasta 10 segundos del video</div>
+          </div>
+          <label class="snap-control">
+            <span>Autoalinear</span>
+            <span class="switch"><input id="snapToggle" type="checkbox" checked><span></span></span>
+          </label>
         </div>
-        <button id="processBtn" class="soft-btn">Procesar clip</button>
+
+        <div class="preset-row" aria-label="Duraciones rápidas">
+          <button class="preset-btn" type="button" data-duration="2">2 s</button>
+          <button class="preset-btn" type="button" data-duration="4">4 s</button>
+          <button class="preset-btn" type="button" data-duration="5">5 s</button>
+          <button class="preset-btn" type="button" data-duration="6">6 s</button>
+          <button class="preset-btn" type="button" data-duration="8">8 s</button>
+          <button class="preset-btn active" type="button" data-duration="10">10 s</button>
+        </div>
+
+        <div class="trim-readout">
+          <span>Inicio <b id="trimStartOut">0.00 s</b></span>
+          <span>Duración <b id="trimDurationOut">10.00 s</b></span>
+          <span>Fin <b id="trimEndOut">10.00 s</b></span>
+        </div>
+
+        <div id="trimBar" class="trim-bar" aria-label="Editor de recorte temporal">
+          <div class="trim-track"></div>
+          <div id="trimSelection" class="trim-selection"></div>
+          <div id="trimTicks" class="trim-ticks"></div>
+          <button id="trimStartHandle" class="trim-handle trim-handle-start" type="button" aria-label="Mover inicio del recorte"><i></i></button>
+          <button id="trimEndHandle" class="trim-handle trim-handle-end" type="button" aria-label="Mover fin del recorte"><i></i></button>
+        </div>
+
+        <div class="trim-fields">
+          <label>Inicio exacto
+            <div class="input-with-unit"><input id="clipStart" type="number" min="0" step="0.01" value="0"><span>s</span></div>
+          </label>
+          <label>Fin exacto
+            <div class="input-with-unit"><input id="clipEnd" type="number" min="0.2" step="0.01" value="10"><span>s</span></div>
+          </label>
+        </div>
+
+        <p class="mini-note trim-note">Con Autoalinear activo, los tiradores se enganchan suavemente a los segundos enteros cuando pasas cerca. Desactívalo para moverlos libremente.</p>
+        <button id="processBtn" class="soft-btn">Procesar recorte</button>
       </div>
 
       <div class="science-note">
         La deformación es una metáfora geométrica interactiva para visualizar dilatación temporal. No es una solución numérica exacta de una métrica relativista.
       </div>
     </aside>
+
+    <section id="trimModal" class="trim-modal" hidden aria-modal="true" role="dialog" aria-labelledby="trimModalTitle">
+      <div class="trim-modal-card glass">
+        <div class="trim-modal-head">
+          <div>
+            <div class="eyebrow">VIDEO SELECCIONADO</div>
+            <div id="trimModalTitle" class="trim-modal-title">Recortar clip</div>
+            <div class="trim-modal-sub">Puedes editarlo o tocar ✓ para usar la selección actual.</div>
+          </div>
+          <button id="trimAcceptBtn" class="trim-accept-btn" type="button" aria-label="Aceptar recorte">✓</button>
+        </div>
+
+        <video id="trimPreview" class="trim-preview" muted playsinline controls preload="metadata"></video>
+        <div id="trimModalMount" class="trim-modal-mount"></div>
+      </div>
+    </section>
 
     <div class="axis-legend glass">
       <span><b>X</b> Tiempo ↑</span>
@@ -209,10 +265,10 @@
 
     <footer class="timeline glass">
       <button id="playBtn" class="play-btn" aria-label="Reproducir o pausar">▶</button>
-      <div class="time-readout"><span id="currentTime">0.0</span><small> / </small><span id="totalTime">5.0 s</span></div>
+      <div class="time-readout"><span id="currentTime">0.0</span><small> / </small><span id="totalTime">10.0 s</span></div>
       <div class="scrub-wrap">
-        <input id="scrubber" type="range" min="0" max="5" step="0.001" value="0" />
-        <div class="ticks"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span></div>
+        <input id="scrubber" type="range" min="0" max="10" step="0.001" value="0" />
+        <div id="timelineTicks" class="ticks"></div>
       </div>
       <button id="rewindBtn" class="icon-btn" title="Volver al inicio" aria-label="Volver al inicio">↺</button>
     </footer>

@@ -10,6 +10,7 @@ const rewindBtn = $('rewindBtn');
 const scrubber = $('scrubber');
 const currentTimeEl = $('currentTime');
 const totalTimeEl = $('totalTime');
+const timelineTicks = $('timelineTicks');
 const sphereToggle = $('sphereToggle');
 const gridToggle = $('gridToggle');
 const radiusSlider = $('radiusSlider');
@@ -31,7 +32,17 @@ const modeSlicesBtn = $('modeSlicesBtn');
 const modeSolidBtn = $('modeSolidBtn');
 const modeOut = $('modeOut');
 const clipStartInput = $('clipStart');
-const clipDurationInput = $('clipDuration');
+const clipEndInput = $('clipEnd');
+const snapToggle = $('snapToggle');
+const trimBar = $('trimBar');
+const trimSelection = $('trimSelection');
+const trimTicks = $('trimTicks');
+const trimStartHandle = $('trimStartHandle');
+const trimEndHandle = $('trimEndHandle');
+const trimStartOut = $('trimStartOut');
+const trimDurationOut = $('trimDurationOut');
+const trimEndOut = $('trimEndOut');
+const presetButtons = [...document.querySelectorAll('.preset-btn')];
 const processBtn = $('processBtn');
 const resetViewBtn = $('resetViewBtn');
 const panelToggle = $('panelToggle');
@@ -41,6 +52,12 @@ const dropHint = $('dropHint');
 const status = $('status');
 const statusText = $('statusText');
 const statusBar = $('statusBar');
+const clipSettingsHome = $('clipSettingsHome');
+const clipSettings = $('clipSettings');
+const trimModal = $('trimModal');
+const trimModalMount = $('trimModalMount');
+const trimAcceptBtn = $('trimAcceptBtn');
+const trimPreview = $('trimPreview');
 const timeWordsToggle = $('timeWordsToggle');
 const secondMarksToggle = $('secondMarksToggle');
 const coordinatesToggle = $('coordinatesToggle');
@@ -58,7 +75,11 @@ const axisLegendEl = document.querySelector('.axis-legend');
 
 const state = {
   clipStart: 0,
-  clipDuration: 5,
+  clipDuration: 10,
+  clipEnd: 10,
+  sourceDuration: 10,
+  maxClipDuration: 10,
+  snapToSeconds: true,
   slices: 64,
   visualMode: 'slices',
   brightness: 1,
@@ -1064,24 +1085,288 @@ async function seekVideo(t) {
   });
 }
 
+
+const MIN_TRIM_DURATION = 0.20;
+
+function getSourceDuration() {
+  const d = state.hasVideo && Number.isFinite(video.duration) ? video.duration : state.sourceDuration;
+  return Math.max(MIN_TRIM_DURATION, d || state.maxClipDuration);
+}
+
+function maybeSnapTrimTime(value) {
+  if (!state.snapToSeconds) return value;
+  const nearest = Math.round(value);
+  const threshold = 0.16;
+  return Math.abs(value - nearest) <= threshold ? nearest : value;
+}
+
+function normalizedTrimRange(start, end, moved = 'end') {
+  const source = getSourceDuration();
+  start = THREE.MathUtils.clamp(Number(start) || 0, 0, Math.max(0, source - MIN_TRIM_DURATION));
+  end = THREE.MathUtils.clamp(Number(end) || MIN_TRIM_DURATION, MIN_TRIM_DURATION, source);
+
+  if (end - start < MIN_TRIM_DURATION) {
+    if (moved === 'start') start = Math.max(0, end - MIN_TRIM_DURATION);
+    else end = Math.min(source, start + MIN_TRIM_DURATION);
+  }
+
+  if (end - start > state.maxClipDuration) {
+    if (moved === 'start') start = Math.max(0, end - state.maxClipDuration);
+    else end = Math.min(source, start + state.maxClipDuration);
+  }
+
+  if (end > source) {
+    end = source;
+    start = Math.max(0, end - Math.min(state.maxClipDuration, end));
+  }
+  if (start < 0) {
+    start = 0;
+    end = Math.min(source, Math.max(MIN_TRIM_DURATION, Math.min(state.maxClipDuration, end)));
+  }
+
+  return { start, end, duration: end - start };
+}
+
+function updatePresetButtons() {
+  const duration = state.clipEnd - state.clipStart;
+  for (const btn of presetButtons) {
+    const value = Number(btn.dataset.duration);
+    btn.classList.toggle('active', Math.abs(duration - value) < 0.035);
+  }
+}
+
+function buildTrimTicks() {
+  if (!trimTicks) return;
+  trimTicks.innerHTML = '';
+  const source = getSourceDuration();
+  // Keep the editor readable for long source videos: dense seconds for short
+  // clips, then increasingly sparse labels while retaining precise handles.
+  let step = 1;
+  if (source > 30) step = 5;
+  if (source > 90) step = 10;
+  if (source > 300) step = 30;
+  const count = Math.floor(source / step);
+  const maxLabels = 16;
+  if (count > maxLabels) step *= Math.ceil(count / maxLabels);
+
+  for (let t = 0; t <= source + 1e-6; t += step) {
+    const span = document.createElement('span');
+    span.className = 'trim-tick';
+    span.style.left = `${(t / source) * 100}%`;
+    span.textContent = `${Math.round(t)}s`;
+    trimTicks.appendChild(span);
+  }
+  if (source % step > 0.05) {
+    const span = document.createElement('span');
+    span.className = 'trim-tick';
+    span.style.left = '100%';
+    span.textContent = `${source < 20 ? source.toFixed(1) : Math.round(source)}s`;
+    trimTicks.appendChild(span);
+  }
+}
+
+function buildTimelineTicks() {
+  if (!timelineTicks) return;
+  timelineTicks.innerHTML = '';
+  const dur = Math.max(MIN_TRIM_DURATION, state.clipDuration);
+  const maxLabels = matchMedia('(max-width: 420px)').matches ? 6 : 11;
+  let step = 1;
+  if (dur > maxLabels - 1) step = 2;
+  for (let t = 0; t <= Math.floor(dur + 1e-6); t += step) {
+    const span = document.createElement('span');
+    span.textContent = `${t}`;
+    timelineTicks.appendChild(span);
+  }
+  const last = timelineTicks.lastElementChild;
+  if (!last || Number(last.textContent) < dur - 0.05) {
+    const span = document.createElement('span');
+    span.textContent = Number.isInteger(dur) ? `${dur}` : dur.toFixed(1);
+    timelineTicks.appendChild(span);
+  }
+}
+
+function syncTrimUI() {
+  const source = getSourceDuration();
+  const { start, end, duration } = normalizedTrimRange(state.clipStart, state.clipEnd, 'end');
+  state.clipStart = start;
+  state.clipEnd = end;
+  state.clipDuration = duration;
+
+  clipStartInput.value = start.toFixed(2);
+  clipEndInput.value = end.toFixed(2);
+  clipStartInput.max = Math.max(0, source - MIN_TRIM_DURATION).toFixed(2);
+  clipEndInput.max = source.toFixed(2);
+
+  trimStartOut.textContent = `${start.toFixed(2)} s`;
+  trimDurationOut.textContent = `${duration.toFixed(2)} s`;
+  trimEndOut.textContent = `${end.toFixed(2)} s`;
+
+  const trackWidth = Math.max(1, trimBar.clientWidth - 24);
+  const leftPx = 12 + (start / source) * trackWidth;
+  const rightPx = 12 + (end / source) * trackWidth;
+  trimStartHandle.style.left = `${leftPx}px`;
+  trimEndHandle.style.left = `${rightPx}px`;
+  trimSelection.style.left = `${leftPx}px`;
+  trimSelection.style.width = `${Math.max(2, rightPx - leftPx)}px`;
+
+  updatePresetButtons();
+}
+
+function setTrimRange(start, end, moved = 'end', { updateTimeline = false } = {}) {
+  const range = normalizedTrimRange(start, end, moved);
+  state.clipStart = range.start;
+  state.clipEnd = range.end;
+  state.clipDuration = range.duration;
+  syncTrimUI();
+  if (updateTimeline) {
+    state.progress = Math.min(state.progress, state.clipDuration);
+    scrubber.max = state.clipDuration;
+    scrubber.value = state.progress;
+    currentTimeEl.textContent = state.progress.toFixed(1);
+    totalTimeEl.textContent = `${state.clipDuration.toFixed(1)} s`;
+    buildTimelineTicks();
+  }
+}
+
+function applyDurationPreset(seconds) {
+  const source = getSourceDuration();
+  const dur = Math.min(Number(seconds), state.maxClipDuration, source);
+  let start = state.clipStart;
+  let end = start + dur;
+  if (end > source) {
+    end = source;
+    start = Math.max(0, end - dur);
+  }
+  setTrimRange(start, end, 'end');
+}
+
+function trimTimeFromClientX(clientX) {
+  const rect = trimBar.getBoundingClientRect();
+  const pad = 12;
+  const usable = Math.max(1, rect.width - pad * 2);
+  const x = THREE.MathUtils.clamp(clientX - rect.left - pad, 0, usable);
+  return (x / usable) * getSourceDuration();
+}
+
+function attachTrimDrag(handle, kind) {
+  let pointerId = null;
+  let dragStartX = 0;
+  let dragStartA = 0;
+  let dragStartB = 0;
+
+  const onPointerDown = (e) => {
+    e.preventDefault();
+    pointerId = e.pointerId;
+    dragStartX = e.clientX;
+    dragStartA = state.clipStart;
+    dragStartB = state.clipEnd;
+    handle.setPointerCapture?.(pointerId);
+  };
+
+  const onPointerMove = (e) => {
+    if (pointerId !== e.pointerId) return;
+    e.preventDefault();
+    if (kind === 'start') {
+      let t = maybeSnapTrimTime(trimTimeFromClientX(e.clientX));
+      t = Math.max(state.clipEnd - state.maxClipDuration, Math.min(t, state.clipEnd - MIN_TRIM_DURATION));
+      setTrimRange(t, state.clipEnd, 'start');
+    } else if (kind === 'end') {
+      let t = maybeSnapTrimTime(trimTimeFromClientX(e.clientX));
+      t = Math.min(state.clipStart + state.maxClipDuration, Math.max(t, state.clipStart + MIN_TRIM_DURATION));
+      setTrimRange(state.clipStart, t, 'end');
+    } else {
+      const rect = trimBar.getBoundingClientRect();
+      const usable = Math.max(1, rect.width - 24);
+      let delta = (e.clientX - dragStartX) / usable * getSourceDuration();
+      if (state.snapToSeconds) {
+        const snappedStart = maybeSnapTrimTime(dragStartA + delta);
+        if (snappedStart !== dragStartA + delta) delta = snappedStart - dragStartA;
+        else {
+          const snappedEnd = maybeSnapTrimTime(dragStartB + delta);
+          if (snappedEnd !== dragStartB + delta) delta = snappedEnd - dragStartB;
+        }
+      }
+      const dur = dragStartB - dragStartA;
+      let start = THREE.MathUtils.clamp(dragStartA + delta, 0, Math.max(0, getSourceDuration() - dur));
+      setTrimRange(start, start + dur, 'end');
+    }
+  };
+
+  const onPointerUp = (e) => {
+    if (pointerId !== e.pointerId) return;
+    handle.releasePointerCapture?.(pointerId);
+    pointerId = null;
+  };
+
+  handle.addEventListener('pointerdown', onPointerDown);
+  handle.addEventListener('pointermove', onPointerMove);
+  handle.addEventListener('pointerup', onPointerUp);
+  handle.addEventListener('pointercancel', onPointerUp);
+}
+
+attachTrimDrag(trimStartHandle, 'start');
+attachTrimDrag(trimEndHandle, 'end');
+attachTrimDrag(trimSelection, 'range');
+
+function restoreClipSettingsHome() {
+  if (!clipSettings || !clipSettingsHome) return;
+  clipSettingsHome.insertAdjacentElement('afterend', clipSettings);
+}
+
+function openTrimModal() {
+  if (!trimModal || !trimModalMount || !clipSettings) return;
+  trimModalMount.appendChild(clipSettings);
+  trimModal.hidden = false;
+  document.body.classList.add('trim-modal-open');
+  if (trimPreview && state.sourceUrl) {
+    trimPreview.src = state.sourceUrl;
+    trimPreview.load();
+  }
+  requestAnimationFrame(() => {
+    buildTrimTicks();
+    syncTrimUI();
+  });
+}
+
+function closeTrimModal() {
+  if (!trimModal) return;
+  trimModal.hidden = true;
+  document.body.classList.remove('trim-modal-open');
+  restoreClipSettingsHome();
+  if (trimPreview) {
+    try { trimPreview.pause(); } catch (_) {}
+    trimPreview.removeAttribute('src');
+    trimPreview.load();
+  }
+}
+
 async function processVideo() {
   if (!state.hasVideo || !Number.isFinite(video.duration)) return buildDemoAtlas();
 
   state.playing = false;
   playBtn.textContent = '▶';
-  let start = Math.max(0, Number(clipStartInput.value) || 0);
-  let dur = Math.max(0.2, Number(clipDurationInput.value) || 5);
-  if (start >= video.duration) start = Math.max(0, video.duration - 0.2);
-  dur = Math.min(dur, Math.max(0.2, video.duration - start));
-  state.clipStart = start;
-  state.clipDuration = dur;
-  clipStartInput.value = start.toFixed(1);
-  clipDurationInput.value = dur.toFixed(1);
+  state.sourceDuration = video.duration;
+
+  const requestedStart = Number(clipStartInput.value);
+  const requestedEnd = Number(clipEndInput.value);
+  const range = normalizedTrimRange(
+    Number.isFinite(requestedStart) ? requestedStart : state.clipStart,
+    Number.isFinite(requestedEnd) ? requestedEnd : state.clipEnd,
+    'end'
+  );
+  state.clipStart = range.start;
+  state.clipEnd = range.end;
+  state.clipDuration = range.duration;
+  syncTrimUI();
+
+  const start = state.clipStart;
+  const dur = state.clipDuration;
   scrubber.max = dur;
   scrubber.value = 0;
   state.progress = 0;
   totalTimeEl.textContent = `${dur.toFixed(1)} s`;
   currentTimeEl.textContent = '0.0';
+  buildTimelineTicks();
 
   state.aspect = video.videoWidth / Math.max(1, video.videoHeight);
   fitDimensions(state.aspect);
@@ -1091,7 +1376,7 @@ async function processVideo() {
   atlasCanvas.height = L.rows * L.tileH;
   atlasCtx.fillStyle = '#000';
   atlasCtx.fillRect(0, 0, atlasCanvas.width, atlasCanvas.height);
-  setStatus('Rebanando el video en el eje temporal…', 0);
+  setStatus(`Procesando ${dur.toFixed(2)} s del video…`, 0);
 
   try {
     await ensureVideoFrameReady();
@@ -1110,7 +1395,7 @@ async function processVideo() {
     clearStatus();
   } catch (err) {
     console.error(err);
-    setStatus('No pude decodificar ese video. Prueba MP4/H.264 o un clip más corto.', 1);
+    setStatus('No pude decodificar ese video. Prueba MP4/H.264 o un recorte más corto.', 1);
     setTimeout(clearStatus, 3200);
   }
 }
@@ -1124,13 +1409,15 @@ function loadVideoFile(file) {
   setStatus('Leyendo video…', 0.08);
   video.onloadedmetadata = () => {
     state.hasVideo = true;
-    const d = video.duration;
-    clipStartInput.max = Math.max(0, d - .2).toFixed(1);
-    const defaultDur = Math.min(5, d);
-    clipDurationInput.max = Math.min(8, d).toFixed(1);
-    clipDurationInput.value = defaultDur.toFixed(1);
+    state.sourceDuration = Math.max(MIN_TRIM_DURATION, video.duration);
+    const defaultDur = Math.min(state.maxClipDuration, state.sourceDuration);
+    state.clipStart = 0;
+    state.clipEnd = defaultDur;
     state.clipDuration = defaultDur;
-    processVideo();
+    buildTrimTicks();
+    syncTrimUI();
+    clearStatus();
+    openTrimModal();
   };
 }
 
@@ -1196,7 +1483,33 @@ function updatePlayback(now) {
 }
 
 input.addEventListener('change', () => loadVideoFile(input.files?.[0]));
-processBtn.addEventListener('click', processVideo);
+processBtn.addEventListener('click', async () => {
+  const wasModalOpen = trimModal && !trimModal.hidden;
+  if (wasModalOpen) closeTrimModal();
+  await processVideo();
+});
+
+trimAcceptBtn?.addEventListener('click', async () => {
+  closeTrimModal();
+  await processVideo();
+});
+
+snapToggle.addEventListener('change', () => {
+  state.snapToSeconds = snapToggle.checked;
+});
+
+for (const btn of presetButtons) {
+  btn.addEventListener('click', () => applyDurationPreset(Number(btn.dataset.duration)));
+}
+
+clipStartInput.addEventListener('change', () => {
+  const start = Number(clipStartInput.value);
+  setTrimRange(start, state.clipEnd, 'start');
+});
+clipEndInput.addEventListener('change', () => {
+  const end = Number(clipEndInput.value);
+  setTrimRange(state.clipStart, end, 'end');
+});
 
 playBtn.addEventListener('click', () => {
   if (state.progress >= state.clipDuration - .001) state.progress = 0;
@@ -1304,6 +1617,8 @@ addEventListener('resize', () => {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  syncTrimUI();
+  buildTimelineTicks();
 });
 
 document.addEventListener('visibilitychange', () => {
@@ -1319,6 +1634,12 @@ timeWordsToggle.checked = true;
 secondMarksToggle.checked = true;
 coordinatesToggle.checked = true;
 presentPlaneToggle.checked = false;
+snapToggle.checked = true;
+state.snapToSeconds = true;
+state.sourceDuration = 10;
+state.clipStart = 0;
+state.clipEnd = 10;
+state.clipDuration = 10;
 state.brightness = Number(brightnessSlider.value) / 100;
 state.futureOpacity = Number(futureOpacitySlider.value) / 100;
 state.gridOpacity = Number(gridOpacitySlider.value) / 100;
@@ -1333,7 +1654,10 @@ setPresentPlaneMode('solid');
 updateFutureUI(false);
 updateGridUI();
 updatePresentPlaneControlsUI();
+buildTrimTicks();
+syncTrimUI();
 buildDemoAtlas();
 scrubber.max = state.clipDuration;
 totalTimeEl.textContent = `${state.clipDuration.toFixed(1)} s`;
+buildTimelineTicks();
 requestAnimationFrame(updatePlayback);
