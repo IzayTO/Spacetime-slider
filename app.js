@@ -227,6 +227,7 @@ function beginProcessing() {
   playBtn.textContent = '▶';
   volume.visible = false;
   if (framePreviewHud) framePreviewHud.hidden = true;
+  document.body.classList.remove('frame-preview-on');
   document.body.classList.add('is-processing');
   renderer.clear(true, true, true);
 }
@@ -450,6 +451,7 @@ function syncFramePreviewVisibility() {
   if (!framePreviewHud) return;
   const show = state.framePreviewEnabled && !!atlasTexture && !state.processing && volume.visible;
   framePreviewHud.hidden = !show;
+  document.body.classList.toggle('frame-preview-on', show);
   if (show) renderFramePreview(true);
 }
 
@@ -1690,10 +1692,13 @@ function syncPanelWindow(target = 'video') {
 function openPanelSection(target = 'video') {
   syncPanelWindow(target);
   panel.classList.add('open');
+  document.body.classList.add('panel-open');
+  if (matchMedia('(max-width: 760px)').matches) closeOrbital();
 }
 
 function closePanelUI() {
   panel.classList.remove('open');
+  document.body.classList.remove('panel-open');
   closeOrbital();
 }
 
@@ -1850,7 +1855,7 @@ document.addEventListener('click', (e) => {
   const t = e.target;
   if (orbitalNav?.classList.contains('open') && !orbitalNav.contains(t)) closeOrbital();
   if (panel.classList.contains('open') && !panel.contains(t) && !panelToggle.contains(t) && !(orbitalNav && orbitalNav.contains(t))) {
-    if (matchMedia('(max-width: 760px)').matches) panel.classList.remove('open');
+    if (matchMedia('(max-width: 760px)').matches) closePanelUI();
   }
 });
 

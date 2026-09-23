@@ -787,3 +787,159 @@ body.trim-modal-open{overflow:hidden;touch-action:none}
 @media (prefers-reduced-motion:reduce){
   .panel,.panel-window.active{transition:none!important;animation:none!important}
 }
+
+/* V16: composición adaptativa limpia para móvil + convivencia HUD en escritorio */
+
+/* El estado activo jamás pinta una cápsula detrás del acceso. */
+.orbital-item.active{
+  background:transparent!important;
+  border-color:transparent!important;
+  box-shadow:none!important;
+}
+
+/* ---------- TELÉFONO ---------- */
+@media (max-width:760px) and (orientation:portrait){
+  :root{
+    --mobile-edge: max(12px, env(safe-area-inset-left));
+    --mobile-bottom: max(10px, env(safe-area-inset-bottom));
+    --mobile-timeline-h: 80px;
+    --mobile-hud-gap: 12px;
+  }
+
+  /* Menú: conserva su posición original, pero nunca invade un panel abierto. */
+  .orbital-nav{
+    z-index:12!important;
+    transition:opacity .15s ease, transform .18s cubic-bezier(.22,.78,.18,1)!important;
+  }
+  body.panel-open .orbital-nav{
+    opacity:0!important;
+    visibility:hidden!important;
+    pointer-events:none!important;
+    transform:translateY(-4px) scale(.985)!important;
+  }
+
+  /* La selección sólo vive dentro del círculo, sin halo/rectángulo externo. */
+  .orbital-item,
+  .orbital-item.active{
+    background:transparent!important;
+    border:0!important;
+    box-shadow:none!important;
+    overflow:visible!important;
+  }
+  .orbital-item::before{display:none!important}
+  .orbital-item.active .orbital-circle{
+    background:rgba(28,32,43,.96)!important;
+    border-color:rgba(145,174,246,.42)!important;
+    box-shadow:0 0 0 1px rgba(112,152,255,.06) inset,0 8px 20px rgba(0,0,0,.20)!important;
+  }
+
+  /* Panel móvil: una superficie limpia. El menú y el monitor se retiran mientras está abierto. */
+  .panel{
+    z-index:14!important;
+    left:10px!important;
+    right:10px!important;
+    top:calc(max(98px, env(safe-area-inset-top) + 78px))!important;
+    bottom:calc(var(--mobile-bottom) + var(--mobile-timeline-h) + 14px)!important;
+    max-height:none!important;
+    border-radius:24px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    overscroll-behavior:contain!important;
+    -webkit-overflow-scrolling:touch!important;
+  }
+  .panel-head{
+    z-index:3!important;
+    top:-1px!important;
+    margin:0 0 12px!important;
+    padding:4px 0 12px!important;
+    background:linear-gradient(180deg,rgba(11,11,14,.985) 0%,rgba(11,11,14,.955) 80%,rgba(11,11,14,0) 100%)!important;
+    border-bottom:1px solid rgba(255,255,255,.065)!important;
+  }
+
+  body.panel-open .frame-preview-hud,
+  body.panel-open .axis-legend{
+    opacity:0!important;
+    visibility:hidden!important;
+    pointer-events:none!important;
+  }
+
+  /* HUD inferior: tres capas verticalmente separadas, nunca una encima de otra. */
+  .timeline{
+    z-index:16!important;
+    left:10px!important;
+    right:10px!important;
+    bottom:var(--mobile-bottom)!important;
+    height:var(--mobile-timeline-h)!important;
+  }
+
+  .axis-legend{
+    display:flex!important;
+    z-index:10!important;
+    left:16px!important;
+    right:auto!important;
+    bottom:calc(var(--mobile-bottom) + var(--mobile-timeline-h) + 12px)!important;
+    max-width:calc(100vw - 32px)!important;
+    padding:7px 9px!important;
+    gap:7px!important;
+    border-radius:13px!important;
+    transition:opacity .14s ease, visibility .14s ease!important;
+  }
+  .axis-legend span{font-size:8.5px!important}
+
+  .frame-preview-hud{
+    z-index:9!important;
+    left:16px!important;
+    right:auto!important;
+    bottom:calc(var(--mobile-bottom) + var(--mobile-timeline-h) + 56px)!important;
+    width:min(126px,33vw)!important;
+    padding:7px!important;
+    border-radius:14px!important;
+    transition:opacity .14s ease, visibility .14s ease, transform .16s ease!important;
+  }
+  .frame-preview-time{font-size:9.5px!important;margin:0 0 5px 1px!important}
+  .frame-preview-meta{font-size:7.6px!important;margin:5px 1px 0!important;gap:5px!important}
+  .frame-preview-canvas{border-radius:8px!important}
+
+  /* En pantallas realmente angostas, las coordenadas siguen cabiendo sin invadir la timeline. */
+  @media (max-width:420px){
+    .axis-legend{left:12px!important;bottom:calc(var(--mobile-bottom) + var(--mobile-timeline-h) + 10px)!important}
+    .frame-preview-hud{left:12px!important;bottom:calc(var(--mobile-bottom) + var(--mobile-timeline-h) + 54px)!important;width:min(118px,34vw)!important}
+  }
+}
+
+/* ---------- ESCRITORIO ---------- */
+@media (min-width:761px){
+  :root{
+    --desktop-edge: 40px;
+    --desktop-timeline-bottom: 22px;
+    --desktop-preview-w: 210px;
+    --desktop-preview-gap: 18px;
+  }
+
+  /* Preview y leyenda comparten la franja inferior sin taparse. */
+  .frame-preview-hud{
+    left:var(--desktop-edge)!important;
+    bottom:122px!important;
+    width:var(--desktop-preview-w)!important;
+  }
+  .axis-legend{
+    bottom:126px!important;
+    left:var(--desktop-edge)!important;
+    transition:left .18s ease, opacity .16s ease!important;
+  }
+  body.frame-preview-on .axis-legend{
+    left:calc(var(--desktop-edge) + var(--desktop-preview-w) + var(--desktop-preview-gap))!important;
+  }
+
+  /* El dock siempre permanece independiente del drawer. */
+  .orbital-nav{z-index:13!important}
+  .panel{z-index:12!important}
+}
+
+@media (min-width:761px) and (max-width:1050px){
+  :root{--desktop-edge:24px;--desktop-preview-w:190px;--desktop-preview-gap:14px}
+}
+
+@media (prefers-reduced-motion:reduce){
+  .orbital-nav,.frame-preview-hud,.axis-legend{transition:none!important}
+}
