@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#000000" />
   <title>Espacio × Tiempo</title>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-  <link rel="stylesheet" href="./style.css" />
+  <link rel="stylesheet" href="./style.css?v=15" />
   <script type="importmap">
   {
     "imports": {
@@ -90,6 +90,14 @@
       <div class="slider-block">
         <div class="slider-label"><span>Brillo del video</span><output id="brightnessOut">100%</output></div>
         <input id="brightnessSlider" type="range" min="50" max="220" step="1" value="100" />
+      </div>
+
+      <div class="control-row switch-row">
+        <div>
+          <div class="control-title">Vista previa 2D</div>
+          <div class="control-sub">Muestra el fotograma activo del clip y su contador sin decodificar otro video</div>
+        </div>
+        <label class="switch"><input id="framePreviewToggle" type="checkbox" checked><span></span></label>
       </div>
 
       <div class="control-row switch-row">
@@ -307,6 +315,12 @@
       <div class="status-track"><i id="statusBar"></i></div>
     </div>
 
+    <section id="framePreviewHud" class="frame-preview-hud glass" aria-label="Vista previa del fotograma" hidden>
+      <div id="framePreviewTime" class="frame-preview-time">00:00.00</div>
+      <canvas id="framePreviewCanvas" class="frame-preview-canvas" width="320" height="180"></canvas>
+      <div class="frame-preview-meta"><span>Fotograma</span> <b id="framePreviewCount">001 / 064</b></div>
+    </section>
+
     <footer class="timeline glass">
       <button id="playBtn" class="play-btn" aria-label="Reproducir o pausar">▶</button>
       <div class="time-readout"><span id="currentTime">0.0</span><small> / </small><span id="totalTime">10.0 s</span></div>
@@ -320,6 +334,6 @@
     <video id="sourceVideo" playsinline muted preload="metadata"></video>
   </main>
 
-  <script type="module" src="./app.js"></script>
+  <script type="module" src="./app.js?v=15"></script>
 </body>
 </html>

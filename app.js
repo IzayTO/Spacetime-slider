@@ -51,10 +51,6 @@ const closePanel = $('closePanel');
 const dropHint = $('dropHint');
 const orbitalNav = $('orbitalNav');
 const orbitalToggle = $('orbitalToggle');
-const orbitalPrev = $('orbitalPrev');
-const orbitalNext = $('orbitalNext');
-const orbitalViewport = $('orbitalViewport');
-const orbitalTrack = $('orbitalTrack');
 const orbitalItems = [...document.querySelectorAll('.orbital-item')];
 const homeLoadBtn = $('homeLoadBtn');
 const homeControlsBtn = $('homeControlsBtn');
@@ -88,6 +84,12 @@ const presentPlaneOutlineSlider = $('presentPlaneOutlineSlider');
 const presentPlaneOpacityOut = $('presentPlaneOpacityOut');
 const presentPlaneOutlineOut = $('presentPlaneOutlineOut');
 const axisLegendEl = document.querySelector('.axis-legend');
+const framePreviewToggle = $('framePreviewToggle');
+const framePreviewHud = $('framePreviewHud');
+const framePreviewCanvas = $('framePreviewCanvas');
+const framePreviewTime = $('framePreviewTime');
+const framePreviewCount = $('framePreviewCount');
+const framePreviewCtx = framePreviewCanvas?.getContext('2d', { alpha: false, desynchronized: true });
 
 const state = {
   clipStart: 0,
@@ -187,12 +189,19 @@ try { atlasCtx.imageSmoothingQuality = 'high'; } catch (_) {}
 
 let sceneNeedsRender = true;
 let dampingFrames = 0;
-let carouselBusy = false;
-let carouselPointerStartX = null;
+let animationFrameHandle = null;
+let previewLastFrame = -1;
+
+function ensureAnimationLoop() {
+  if (animationFrameHandle != null || state.processing || document.hidden) return;
+  state.lastT = performance.now();
+  animationFrameHandle = requestAnimationFrame(updatePlayback);
+}
 
 function requestSceneRender(frames = 1) {
   sceneNeedsRender = true;
   dampingFrames = Math.max(dampingFrames, frames);
+  ensureAnimationLoop();
 }
 
 function targetPixelRatio() {
@@ -217,6 +226,7 @@ function beginProcessing() {
   state.playing = false;
   playBtn.textContent = '▶';
   volume.visible = false;
+  if (framePreviewHud) framePreviewHud.hidden = true;
   document.body.classList.add('is-processing');
   renderer.clear(true, true, true);
 }
@@ -226,7 +236,12 @@ function endProcessing(showVolume = true) {
   volume.visible = showVolume;
   document.body.classList.remove('is-processing');
   state.lastT = performance.now();
-  if (showVolume) renderer.render(scene, camera);
+  previewLastFrame = -1;
+  syncFramePreviewVisibility();
+  if (showVolume) {
+    sceneNeedsRender = true;
+    ensureAnimationLoop();
+  }
 }
 
 let trimPreviewSeekTimer = null;
@@ -324,6 +339,7 @@ function buildDemoAtlas() {
   }
   uploadAtlas(L);
   rebuildVolume(L, true);
+  syncFramePreviewVisibility();
 }
 
 function drawDemoFrame(ctx, x, y, w, h, t) {
@@ -370,6 +386,71 @@ function uploadAtlas(layout) {
   atlasTexture.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy?.() || 1);
   atlasTexture.needsUpdate = true;
   atlasTexture.userData.layout = layout;
+  previewLastFrame = -1;
+}
+
+function formatPreviewTime(seconds) {
+  const safe = Math.max(0, Number(seconds) || 0);
+  const minutes = Math.floor(safe / 60);
+  const secs = Math.floor(safe % 60);
+  const hundredths = Math.floor((safe - Math.floor(safe)) * 100 + 1e-6);
+  return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}.${String(hundredths).padStart(2, '0')}`;
+}
+
+function renderFramePreview(force = false) {
+  if (!framePreviewHud || !framePreviewCanvas || !framePreviewCtx || !atlasTexture || !state.framePreviewEnabled || state.processing) return;
+  const layout = atlasTexture.userData.layout;
+  if (!layout) return;
+
+  const total = Math.max(1, state.slices);
+  const normalized = THREE.MathUtils.clamp(state.progress / Math.max(0.001, state.clipDuration), 0, 1);
+  const frameIndex = THREE.MathUtils.clamp(Math.round(normalized * Math.max(0, total - 1)), 0, total - 1);
+
+  framePreviewTime.textContent = formatPreviewTime(state.progress);
+  framePreviewCount.textContent = `${String(frameIndex + 1).padStart(3, '0')} / ${String(total).padStart(3, '0')}`;
+
+  if (!force && frameIndex === previewLastFrame) return;
+  const col = frameIndex % layout.cols;
+  const row = Math.floor(frameIndex / layout.cols);
+  const targetW = 320;
+  const targetH = 180;
+  if (framePreviewCanvas.width !== targetW || framePreviewCanvas.height !== targetH) {
+    framePreviewCanvas.width = targetW;
+    framePreviewCanvas.height = targetH;
+    framePreviewCtx.imageSmoothingEnabled = true;
+    try { framePreviewCtx.imageSmoothingQuality = 'high'; } catch (_) {}
+  }
+  framePreviewCtx.fillStyle = '#050506';
+  framePreviewCtx.fillRect(0, 0, targetW, targetH);
+  const srcAspect = layout.tileW / Math.max(1, layout.tileH);
+  const dstAspect = targetW / targetH;
+  let dx = 0, dy = 0, dw = targetW, dh = targetH;
+  if (srcAspect > dstAspect) {
+    dh = targetW / srcAspect;
+    dy = (targetH - dh) * 0.5;
+  } else {
+    dw = targetH * srcAspect;
+    dx = (targetW - dw) * 0.5;
+  }
+  framePreviewCtx.drawImage(
+    atlasCanvas,
+    col * layout.tileW,
+    row * layout.tileH,
+    layout.tileW,
+    layout.tileH,
+    dx,
+    dy,
+    dw,
+    dh
+  );
+  previewLastFrame = frameIndex;
+}
+
+function syncFramePreviewVisibility() {
+  if (!framePreviewHud) return;
+  const show = state.framePreviewEnabled && !!atlasTexture && !state.processing && volume.visible;
+  framePreviewHud.hidden = !show;
+  if (show) renderFramePreview(true);
 }
 
 function cloneGeometryIntoInstanced(base, count) {
@@ -1526,14 +1607,12 @@ function updateFutureUI(rebuild = false) {
 }
 
 function updatePlayback(now) {
-  const dt = Math.min(.05, (now - state.lastT) / 1000);
+  animationFrameHandle = null;
+  const dt = Math.min(.05, Math.max(0, (now - state.lastT) / 1000));
   state.lastT = now;
 
-  // Mientras extraemos fotogramas no renderizamos la escena 3D.
-  if (state.processing || document.hidden) {
-    requestAnimationFrame(updatePlayback);
-    return;
-  }
+  // Durante la extracción o cuando la pestaña está oculta no mantenemos un RAF activo.
+  if (state.processing || document.hidden) return;
 
   if (state.playing) {
     state.progress += dt;
@@ -1547,14 +1626,8 @@ function updatePlayback(now) {
     sceneNeedsRender = true;
   }
 
-  // Cuando todo está quieto, conservamos el RAF liviano pero evitamos la parte
-  // cara: shaders, OrbitControls y render WebGL. La escena sólo vuelve a dibujarse
-  // al reproducir, mover la cámara o cambiar un control.
   const shouldRender = state.playing || sceneNeedsRender || dampingFrames > 0;
-  if (!shouldRender) {
-    requestAnimationFrame(updatePlayback);
-    return;
-  }
+  if (!shouldRender) return;
 
   if (sliceMaterial) {
     sliceMaterial.uniforms.uProgress.value = state.clipDuration ? state.progress / state.clipDuration : 0;
@@ -1576,11 +1649,14 @@ function updatePlayback(now) {
 
   updatePresentPlanePosition();
   updateTimeRuler();
+  renderFramePreview(false);
   controls.update();
   renderer.render(scene, camera);
   sceneNeedsRender = false;
   if (dampingFrames > 0) dampingFrames--;
-  requestAnimationFrame(updatePlayback);
+
+  // Sólo seguimos pidiendo frames mientras algo realmente cambia.
+  if (state.playing || dampingFrames > 0 || sceneNeedsRender) ensureAnimationLoop();
 }
 
 function setOrbitalOpen(open) {
@@ -1591,61 +1667,6 @@ function setOrbitalOpen(open) {
 }
 
 function closeOrbital() { setOrbitalOpen(false); }
-
-function carouselStep(direction = 1) {
-  if (!orbitalTrack || carouselBusy || orbitalTrack.children.length < 2) return;
-  carouselBusy = true;
-  const gap = 10;
-  const first = orbitalTrack.children[0];
-  const itemWidth = first.getBoundingClientRect().width || 50;
-  const step = itemWidth + gap;
-
-  if (direction > 0) {
-    orbitalTrack.style.transition = 'transform .24s cubic-bezier(.22,.75,.18,1)';
-    orbitalTrack.style.transform = `translate3d(${-step}px,0,0)`;
-    setTimeout(() => {
-      orbitalTrack.style.transition = 'none';
-      orbitalTrack.appendChild(orbitalTrack.firstElementChild);
-      orbitalTrack.style.transform = 'translate3d(0,0,0)';
-      requestAnimationFrame(() => {
-        orbitalTrack.style.transition = '';
-        carouselBusy = false;
-      });
-    }, 245);
-  } else {
-    orbitalTrack.style.transition = 'none';
-    orbitalTrack.insertBefore(orbitalTrack.lastElementChild, orbitalTrack.firstElementChild);
-    orbitalTrack.style.transform = `translate3d(${-step}px,0,0)`;
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        orbitalTrack.style.transition = 'transform .24s cubic-bezier(.22,.75,.18,1)';
-        orbitalTrack.style.transform = 'translate3d(0,0,0)';
-        setTimeout(() => {
-          orbitalTrack.style.transition = '';
-          carouselBusy = false;
-        }, 245);
-      });
-    });
-  }
-}
-
-function initOrbitalCarousel() {
-  if (!orbitalViewport || !orbitalTrack) return;
-  orbitalPrev?.addEventListener('click', (e) => { e.stopPropagation(); carouselStep(-1); });
-  orbitalNext?.addEventListener('click', (e) => { e.stopPropagation(); carouselStep(1); });
-
-  orbitalViewport.addEventListener('pointerdown', (e) => {
-    carouselPointerStartX = e.clientX;
-  });
-  orbitalViewport.addEventListener('pointerup', (e) => {
-    if (carouselPointerStartX == null) return;
-    const dx = e.clientX - carouselPointerStartX;
-    carouselPointerStartX = null;
-    if (Math.abs(dx) < 28) return;
-    carouselStep(dx < 0 ? 1 : -1);
-  });
-  orbitalViewport.addEventListener('pointercancel', () => { carouselPointerStartX = null; });
-}
 
 function syncPanelWindow(target = 'video') {
   const labelMap = {
@@ -1714,6 +1735,7 @@ playBtn.addEventListener('click', () => {
   if (state.progress >= state.clipDuration - .001) state.progress = 0;
   state.playing = !state.playing;
   playBtn.textContent = state.playing ? 'Ⅱ' : '▶';
+  requestSceneRender(1);
 });
 
 rewindBtn.addEventListener('click', () => {
@@ -1743,6 +1765,12 @@ strengthSlider.addEventListener('input', () => {
 brightnessSlider.addEventListener('input', () => {
   state.brightness = Number(brightnessSlider.value) / 100;
   brightnessOut.textContent = `${brightnessSlider.value}%`;
+});
+
+framePreviewToggle?.addEventListener('change', () => {
+  state.framePreviewEnabled = framePreviewToggle.checked;
+  previewLastFrame = -1;
+  syncFramePreviewVisibility();
 });
 
 futureToggle.addEventListener('change', () => updateFutureUI(true));
@@ -1798,8 +1826,14 @@ panelToggle.addEventListener('click', () => panel.classList.contains('open') ? c
 closePanel.addEventListener('click', closePanelUI);
 orbitalToggle?.addEventListener('click', () => setOrbitalOpen(!orbitalNav.classList.contains('open')));
 orbitalItems.forEach(btn => btn.addEventListener('click', () => {
-  openPanelSection(btn.dataset.panelTarget || 'video');
-  setOrbitalOpen(false);
+  const target = btn.dataset.panelTarget || 'video';
+  const desktop = matchMedia('(min-width: 761px)').matches;
+  if (desktop && panel.classList.contains('open') && state.activePanelTarget === target) {
+    closePanelUI();
+    return;
+  }
+  openPanelSection(target);
+  if (!desktop) setOrbitalOpen(false);
 }));
 homeLoadBtn?.addEventListener('click', () => input.click());
 homeControlsBtn?.addEventListener('click', () => {
@@ -1899,6 +1933,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) {
     state.playing = false;
     playBtn.textContent = '▶';
+    if (animationFrameHandle != null) {
+      cancelAnimationFrame(animationFrameHandle);
+      animationFrameHandle = null;
+    }
+  } else {
+    requestSceneRender(1);
   }
 });
 
@@ -1933,10 +1973,9 @@ syncTrimUI();
 initHomeVisualState();
 setOrbitalOpen(false);
 syncPanelWindow('video');
-initOrbitalCarousel();
 syncAppHeight();
 volume.visible = false;
 scrubber.max = state.clipDuration;
 totalTimeEl.textContent = `${state.clipDuration.toFixed(1)} s`;
 buildTimelineTicks();
-requestAnimationFrame(updatePlayback);
+requestSceneRender(1);
